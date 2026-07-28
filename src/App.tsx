@@ -29,6 +29,7 @@ import {
   Member,
   Celula,
   Congregation,
+  Asset,
   Ministry,
   EventItem,
   FinancialTransaction,
@@ -55,6 +56,7 @@ export default function App() {
   const [congregations, setCongregations] = useState<Congregation[]>([]);
   const [celulas, setCelulas] = useState<Celula[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [ministries, setMinistries] = useState<Ministry[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [finances, setFinances] = useState<FinancialTransaction[]>([]);
@@ -69,6 +71,7 @@ export default function App() {
     setCongregations(StorageService.getCongregations());
     setCelulas(StorageService.getCelulas());
     setMembers(StorageService.getMembers());
+    setAssets(StorageService.getAssets());
     setMinistries(StorageService.getMinistries());
     setEvents(StorageService.getEvents());
     setFinances(StorageService.getFinances());
@@ -120,6 +123,37 @@ export default function App() {
     if (selectedCongregationId === id) {
       setSelectedCongregationId('all');
     }
+  };
+
+  // Handlers for Assets
+  const handleAddAsset = (newAst: Partial<Asset>) => {
+    const item: Asset = {
+      id: `ast-${Date.now()}`,
+      name: newAst.name || 'Novo Item de Patrimônio',
+      category: newAst.category || 'Equipamento de Som',
+      quantity: newAst.quantity || 1,
+      estimatedValue: newAst.estimatedValue,
+      condition: newAst.condition || 'Excelente',
+      congregationId: newAst.congregationId || congregations[0]?.id || 'cong-1',
+      locationDetails: newAst.locationDetails,
+      acquisitionDate: newAst.acquisitionDate,
+      notes: newAst.notes,
+    };
+    const updated = [item, ...assets];
+    setAssets(updated);
+    StorageService.setAssets(updated);
+  };
+
+  const handleUpdateAsset = (updatedAst: Asset) => {
+    const updated = assets.map((a) => (a.id === updatedAst.id ? updatedAst : a));
+    setAssets(updated);
+    StorageService.setAssets(updated);
+  };
+
+  const handleDeleteAsset = (id: string) => {
+    const updated = assets.filter((a) => a.id !== id);
+    setAssets(updated);
+    StorageService.setAssets(updated);
   };
 
   // Handlers for Members
@@ -188,11 +222,23 @@ export default function App() {
       neighborhood: newCel.neighborhood || 'Bairro',
       dayOfWeek: newCel.dayOfWeek || 'Quinta-feira',
       time: newCel.time || '20:00h',
-      congregationId: congregations[0]?.id || 'cong-1',
-      membersCount: 1,
+      congregationId: newCel.congregationId || congregations[0]?.id || 'cong-1',
+      membersCount: newCel.membersCount || 1,
       category: newCel.category || 'Jovens',
     };
     const updated = [item, ...celulas];
+    setCelulas(updated);
+    StorageService.setCelulas(updated);
+  };
+
+  const handleUpdateCelula = (updatedCel: Celula) => {
+    const updated = celulas.map((c) => (c.id === updatedCel.id ? updatedCel : c));
+    setCelulas(updated);
+    StorageService.setCelulas(updated);
+  };
+
+  const handleDeleteCelula = (id: string) => {
+    const updated = celulas.filter((c) => c.id !== id);
     setCelulas(updated);
     StorageService.setCelulas(updated);
   };
@@ -365,16 +411,25 @@ export default function App() {
             <CelulasView
               celulas={celulas}
               congregations={congregations}
-              onAddCelula={() => openQuickAction('celula')}
+              onAddCelula={handleAddCelula}
+              onUpdateCelula={handleUpdateCelula}
+              onDeleteCelula={handleDeleteCelula}
             />
           )}
 
           {currentView === 'congregacoes' && (
             <CongregacoesView
               congregations={congregations}
+              members={members}
+              assets={assets}
+              events={events}
               onAddCongregation={handleAddCongregation}
               onUpdateCongregation={handleUpdateCongregation}
               onDeleteCongregation={handleDeleteCongregation}
+              onAddAsset={handleAddAsset}
+              onUpdateAsset={handleUpdateAsset}
+              onDeleteAsset={handleDeleteAsset}
+              onAddEvent={() => openQuickAction('membro')}
             />
           )}
 

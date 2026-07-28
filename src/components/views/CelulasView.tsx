@@ -10,22 +10,31 @@ import {
   Search,
   Tag,
   Building2,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { Celula, Congregation } from '../../types';
+import { CelulaModal } from '../CelulaModal';
 
 interface CelulasViewProps {
   celulas: Celula[];
   congregations: Congregation[];
-  onAddCelula: () => void;
+  onAddCelula: (newCel: Partial<Celula>) => void;
+  onUpdateCelula?: (updatedCel: Celula) => void;
+  onDeleteCelula?: (id: string) => void;
 }
 
 export const CelulasView: React.FC<CelulasViewProps> = ({
   celulas,
   congregations,
   onAddCelula,
+  onUpdateCelula,
+  onDeleteCelula,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('todas');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCelula, setEditingCelula] = useState<Celula | null>(null);
 
   const filteredCelulas = celulas.filter((c) => {
     const matchesSearch =
@@ -37,6 +46,38 @@ export const CelulasView: React.FC<CelulasViewProps> = ({
 
     return matchesSearch && matchesCategory;
   });
+
+  const handleOpenCreateModal = () => {
+    setEditingCelula(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (celula: Celula) => {
+    setEditingCelula(celula);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveModal = (data: Partial<Celula>) => {
+    if (editingCelula && onUpdateCelula) {
+      onUpdateCelula({
+        ...editingCelula,
+        ...data,
+        name: data.name || editingCelula.name,
+      } as Celula);
+    } else {
+      onAddCelula(data);
+    }
+    setIsModalOpen(false);
+    setEditingCelula(null);
+  };
+
+  const handleDelete = (id: string, name: string) => {
+    if (window.confirm(`Tem certeza que deseja excluir a célula "${name}"?`)) {
+      if (onDeleteCelula) {
+        onDeleteCelula(id);
+      }
+    }
+  };
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-200">
@@ -53,8 +94,8 @@ export const CelulasView: React.FC<CelulasViewProps> = ({
         </div>
 
         <button
-          onClick={onAddCelula}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-md shadow-amber-200 transition-all self-start sm:self-auto"
+          onClick={handleOpenCreateModal}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-md shadow-amber-200 transition-all self-start sm:self-auto cursor-pointer active:scale-95"
         >
           <Plus className="w-4 h-4" />
           + Nova Célula
@@ -79,7 +120,7 @@ export const CelulasView: React.FC<CelulasViewProps> = ({
             <button
               key={cat}
               onClick={() => setCategoryFilter(cat)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 categoryFilter === cat
                   ? 'bg-amber-500 text-slate-950 shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -99,7 +140,7 @@ export const CelulasView: React.FC<CelulasViewProps> = ({
           return (
             <div
               key={cel.id}
-              className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+              className="p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group relative"
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
@@ -109,9 +150,31 @@ export const CelulasView: React.FC<CelulasViewProps> = ({
                     </span>
                     <h3 className="font-bold text-slate-900 text-lg mt-2">{cel.name}</h3>
                   </div>
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-bold shrink-0">
-                    <Users className="w-3.5 h-3.5" />
-                    <span>{cel.membersCount} participantes</span>
+
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-bold shrink-0">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>{cel.membersCount}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 ml-1">
+                      <button
+                        onClick={() => handleOpenEditModal(cel)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
+                        title="Editar Célula"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      {onDeleteCelula && (
+                        <button
+                          onClick={() => handleDelete(cel.id, cel.name)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          title="Excluir Célula"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -124,10 +187,12 @@ export const CelulasView: React.FC<CelulasViewProps> = ({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span>{cel.leaderPhone}</span>
-                  </div>
+                  {cel.leaderPhone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span>{cel.leaderPhone}</span>
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-amber-500 shrink-0" />
@@ -157,6 +222,19 @@ export const CelulasView: React.FC<CelulasViewProps> = ({
           );
         })}
       </div>
+
+      {/* Celula Modal */}
+      <CelulaModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingCelula(null);
+        }}
+        onSave={handleSaveModal}
+        initialData={editingCelula}
+        congregations={congregations}
+      />
     </div>
   );
 };
+

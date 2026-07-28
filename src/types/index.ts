@@ -62,6 +62,19 @@ export interface Congregation {
   servicesSchedule: string[];
 }
 
+export interface Asset {
+  id: string;
+  name: string;
+  category: 'Equipamento de Som' | 'Instrumento Musical' | 'Mobiliário' | 'Mídia/TI' | 'Imóvel/Estrutura' | 'Outros';
+  quantity: number;
+  estimatedValue?: number;
+  condition: 'Excelente' | 'Bom' | 'Necessita Reparo' | 'Danificado';
+  congregationId: string;
+  locationDetails?: string;
+  acquisitionDate?: string;
+  notes?: string;
+}
+
 export interface Ministry {
   id: string;
   name: string;

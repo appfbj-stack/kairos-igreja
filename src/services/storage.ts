@@ -2,6 +2,7 @@ import {
   Member,
   Celula,
   Congregation,
+  Asset,
   Ministry,
   EventItem,
   FinancialTransaction,
@@ -16,6 +17,7 @@ import {
   INITIAL_CONGREGATIONS,
   INITIAL_CELULAS,
   INITIAL_MEMBERS,
+  INITIAL_ASSETS,
   INITIAL_MINISTRIES,
   INITIAL_EVENTS,
   INITIAL_FINANCES,
@@ -30,6 +32,7 @@ const KEYS = {
   CONGREGATIONS: 'kairos_congregations_v1',
   CELULAS: 'kairos_celulas_v1',
   MEMBERS: 'kairos_members_v1',
+  ASSETS: 'kairos_assets_v1',
   MINISTRIES: 'kairos_ministries_v1',
   EVENTS: 'kairos_events_v1',
   FINANCES: 'kairos_finances_v1',
@@ -67,6 +70,9 @@ export const StorageService = {
 
   getMembers: () => getStorage<Member[]>(KEYS.MEMBERS, INITIAL_MEMBERS),
   setMembers: (data: Member[]) => setStorage(KEYS.MEMBERS, data),
+
+  getAssets: () => getStorage<Asset[]>(KEYS.ASSETS, INITIAL_ASSETS),
+  setAssets: (data: Asset[]) => setStorage(KEYS.ASSETS, data),
 
   getMinistries: () => getStorage<Ministry[]>(KEYS.MINISTRIES, INITIAL_MINISTRIES),
   setMinistries: (data: Ministry[]) => setStorage(KEYS.MINISTRIES, data),
