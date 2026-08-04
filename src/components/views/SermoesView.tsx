@@ -2,18 +2,12 @@ import React, { useState } from 'react';
 import {
   BookOpen,
   Play,
-  Volume2,
-  Sparkles,
-  FileText,
   User,
-  Tag,
   Search,
   Plus,
-  Loader2,
   Edit2,
   Trash2,
   ExternalLink,
-  Save,
 } from 'lucide-react';
 import { Sermon } from '../../types';
 import { SermonModal } from '../SermonModal';
@@ -37,14 +31,6 @@ export const SermoesView: React.FC<SermoesViewProps> = ({
   // Modal State for Create/Edit
   const [isSermonModalOpen, setIsSermonModalOpen] = useState(false);
   const [editingSermon, setEditingSermon] = useState<Sermon | null>(null);
-
-  // AI Outline State
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [aiTheme, setAiTheme] = useState('');
-  const [aiPassage, setAiPassage] = useState('');
-  const [aiAudience, setAiAudience] = useState('Igreja Geral');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedOutline, setGeneratedOutline] = useState<any>(null);
 
   const filteredSermons = sermons.filter(
     (s) =>
@@ -88,66 +74,6 @@ export const SermoesView: React.FC<SermoesViewProps> = ({
     }
   };
 
-  const handleConvertAiToSermon = () => {
-    if (!generatedOutline) return;
-    const summaryText = `Introdução: ${generatedOutline.introduction || ''}\n\nPontos Principais:\n${
-      generatedOutline.mainPoints
-        ?.map((p: any) => `• ${p.point}: ${p.explanation}`)
-        .join('\n') || ''
-    }\n\nConclusão: ${generatedOutline.conclusion || ''}\n\nOração: ${generatedOutline.prayer || ''}`;
-
-    setEditingSermon({
-      id: '',
-      title: generatedOutline.title || aiTheme || 'Esboço de Pregação',
-      preacher: 'Pastor',
-      biblePassage: generatedOutline.passage || aiPassage || 'Passagem Bíblica',
-      date: new Date().toISOString().split('T')[0],
-      summary: summaryText,
-      series: 'Gerado via IA Kairos',
-      tags: ['IA Kairos', 'Esboço', 'Estudo'],
-      viewsCount: 0,
-    });
-    setShowAiModal(false);
-    setIsSermonModalOpen(true);
-  };
-
-  const handleGenerateOutline = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsGenerating(true);
-    setGeneratedOutline(null);
-
-    try {
-      const res = await fetch('/api/ai/sermon-outline', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          theme: aiTheme,
-          passage: aiPassage,
-          audience: aiAudience,
-        }),
-      });
-
-      const data = await res.json();
-      setGeneratedOutline(data);
-    } catch (err) {
-      console.error(err);
-      // Fallback in case of mock offline
-      setGeneratedOutline({
-        title: `Esboço: ${aiTheme}`,
-        passage: aiPassage || 'Filipenses 4:6-7',
-        introduction: `O tema "${aiTheme}" traz uma palavra transformadora sobre a caminhada cristã.`,
-        mainPoints: [
-          { point: '1. O Fundamento da Fé', explanation: 'Ancorando nossas esperanças nas promessas divinas.' },
-          { point: '2. A Prática no Cotidiano', explanation: 'Demonstrando amor e perseverança nas tribulações.' },
-        ],
-        conclusion: 'Deus nos chama a viver com ousadia e confiança.',
-        prayer: 'Senhor, abençoe esta mensagem na vida da congregação.',
-      });
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-200">
       {/* Top Header */}
@@ -158,18 +84,11 @@ export const SermoesView: React.FC<SermoesViewProps> = ({
             Acervo de Sermões & Pregações
           </h1>
           <p className="text-xs text-[#8a8a70] mt-1">
-            Cadastre, edite, ouça mensagens, baixe esboços e prepare pregações inspiradoras com IA.
+            Cadastre, edite, ouça mensagens e baixe esboços de pregações.
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-          <button
-            onClick={() => setShowAiModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#5a5a40] to-[#a68a64] hover:opacity-95 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer"
-          >
-            <Sparkles className="w-4 h-4 text-amber-300" />
-            Gerador de Esboço IA
-          </button>
           <button
             onClick={handleOpenCreateModal}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2a2a20] hover:bg-[#1f1f18] text-white font-bold text-xs transition-all shadow-xs cursor-pointer active:scale-95"
@@ -369,138 +288,6 @@ export const SermoesView: React.FC<SermoesViewProps> = ({
         onSave={handleSaveSermon}
         initialData={editingSermon}
       />
-
-      {/* AI Sermon Generator Modal */}
-      {showAiModal && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-[#e0e0d0]">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-[#5a5a40]/10 text-[#5a5a40]">
-                  <Sparkles className="w-5 h-5 text-[#a68a64]" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-[#2a2a20] text-lg">Gerador de Esboço Pastoral Kairos</h3>
-                  <p className="text-xs text-[#8a8a70]">Crie sermões e estudos bíblicos com auxílio de IA</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowAiModal(false)}
-                className="text-[#8a8a70] hover:text-[#2a2a20] text-xs font-bold"
-              >
-                Fechar
-              </button>
-            </div>
-
-            <form onSubmit={handleGenerateOutline} className="mt-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#2a2a20] uppercase mb-1">
-                  Tema da Pregação
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: O Poder da Oração em Família, Fidelidade no Pouco..."
-                  value={aiTheme}
-                  onChange={(e) => setAiTheme(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-[#f5f5f0] border border-[#e0e0d0] text-xs text-[#2a2a20] focus:outline-none focus:ring-2 focus:ring-[#5a5a40]/20"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-[#2a2a20] uppercase mb-1">
-                    Passagem Bíblica
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Filipenses 4:6-7, Salmo 91"
-                    value={aiPassage}
-                    onChange={(e) => setAiPassage(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-[#f5f5f0] border border-[#e0e0d0] text-xs text-[#2a2a20] focus:outline-none focus:ring-2 focus:ring-[#5a5a40]/20"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#2a2a20] uppercase mb-1">
-                    Público Alvo
-                  </label>
-                  <select
-                    value={aiAudience}
-                    onChange={(e) => setAiAudience(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-[#f5f5f0] border border-[#e0e0d0] text-xs text-[#2a2a20] focus:outline-none focus:ring-2 focus:ring-[#5a5a40]/20 font-medium"
-                  >
-                    <option value="Igreja Geral">Culto Geral de Domingo</option>
-                    <option value="Líderes de Célula">Encontro de Líderes</option>
-                    <option value="Jovens">Culto de Jovens</option>
-                    <option value="Casais">Reunião de Casais</option>
-                  </select>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isGenerating}
-                className="w-full py-3 rounded-xl bg-[#5a5a40] hover:bg-[#4d4d36] text-white font-bold text-xs transition-opacity flex items-center justify-center gap-2 cursor-pointer shadow-md"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
-                    Gerando Esboço Inspirado...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 text-amber-300" />
-                    Gerar Esboço Completo
-                  </>
-                )}
-              </button>
-            </form>
-
-            {generatedOutline && (
-              <div className="mt-6 p-6 rounded-2xl bg-[#2a2a20] text-white space-y-4 animate-in fade-in duration-200">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold font-serif text-lg text-amber-400">
-                    {generatedOutline.title}
-                  </h4>
-                  <button
-                    onClick={handleConvertAiToSermon}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#a68a64] hover:bg-[#967a54] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-                  >
-                    <Save className="w-3.5 h-3.5" /> Salvar como Sermão
-                  </button>
-                </div>
-
-                <p className="text-xs text-slate-300 font-bold">
-                  Texto Base: {generatedOutline.passage}
-                </p>
-
-                <div className="space-y-2 text-xs text-slate-200">
-                  <p>
-                    <strong className="text-white">Introdução:</strong> {generatedOutline.introduction}
-                  </p>
-
-                  <div className="pt-2 space-y-2">
-                    <p className="font-bold text-amber-300 uppercase text-[10px]">Pontos Principais:</p>
-                    {generatedOutline.mainPoints?.map((pt: any, idx: number) => (
-                      <div key={idx} className="p-3 rounded-xl bg-white/10 border border-white/10">
-                        <p className="font-bold text-white text-xs">{pt.point}</p>
-                        <p className="text-slate-300 text-[11px] mt-1">{pt.explanation}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <p className="pt-2">
-                    <strong className="text-white">Conclusão:</strong> {generatedOutline.conclusion}
-                  </p>
-                  <p className="italic text-slate-300 bg-white/10 p-3 rounded-xl border border-white/10">
-                    "{generatedOutline.prayer}"
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

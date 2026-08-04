@@ -9,11 +9,17 @@ export function authMiddleware(
   next: NextFunction
 ) {
   const header = req.headers.authorization;
-  if (!header || !header.startsWith("Bearer ")) {
+  let token: string | undefined;
+  if (header && header.startsWith("Bearer ")) {
+    token = header.split(" ")[1];
+  } else if (typeof req.query.token === "string") {
+    token = req.query.token; // SSE fallback (EventSource não suporta headers)
+  }
+
+  if (!token) {
     return res.status(401).json({ success: false, error: "Token não fornecido" });
   }
 
-  const token = header.split(" ")[1];
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as AuthPayload;
     req.user = decoded;

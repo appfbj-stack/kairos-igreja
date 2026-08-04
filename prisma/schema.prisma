@@ -38,6 +38,7 @@ model Tenant {
   chats         ChatMessage[]
   assets        Asset[]
   backups       Backup[]
+  conversations ChatConversation[]
 }
 
 // ============================================================
@@ -66,6 +67,10 @@ model User {
 
   tenant   Tenant    @relation(fields: [tenantId], references: [id])
   sessions Session[]
+
+  conversationsA ChatConversation[] @relation("ParticipantA")
+  conversationsB ChatConversation[] @relation("ParticipantB")
+  chatMessages   ChatMessage[]
 
   @@index([tenantId])
   @@index([email])
@@ -316,21 +321,45 @@ model MuralNotice {
 }
 
 // ============================================================
-// CHAT
+// CHAT — DM 1:1 (estilo WhatsApp)
 // ============================================================
-model ChatMessage {
-  id        String   @id @default(uuid())
-  tenantId  String
-  userId    String?
-  sender    String
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deletedAt DateTime?
+model ChatConversation {
+  id            String   @id @default(uuid())
+  tenantId      String
+  userAId       String
+  userBId       String
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant     Tenant  @relation(fields: [tenantId], references: [id])
+  userA      User    @relation("ParticipantA", fields: [userAId], references: [id])
+  userB      User    @relation("ParticipantB", fields: [userBId], references: [id])
+  messages   ChatMessage[]
+
+  @@unique([userAId, userBId])
+  @@index([tenantId])
+  @@index([userAId])
+  @@index([userBId])
+  @@index([lastMessageAt])
+}
+
+model ChatMessage {
+  id              String   @id @default(uuid())
+  tenantId        String
+  conversationId  String
+  senderId        String
+  content         String
+  readByReceiver  Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  tenant       Tenant           @relation(fields: [tenantId], references: [id])
+  conversation ChatConversation @relation(fields: [conversationId], references: [id])
+  sender       User             @relation(fields: [senderId], references: [id])
 
   @@index([tenantId])
+  @@index([conversationId])
+  @@index([senderId])
   @@index([createdAt])
 }
 

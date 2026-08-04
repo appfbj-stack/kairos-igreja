@@ -7,6 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { QuickActionModal } from './components/QuickActionModal';
+import { Login } from './components/Login';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Views
 import { DashboardView } from './components/views/DashboardView';
@@ -41,6 +43,17 @@ import {
 } from './types';
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
+  );
+}
+
+function AppInner() {
+  const { user } = useAuth();
+  if (!user) return <Login />;
+
   const [currentView, setCurrentView] = useState<ViewMode>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedCongregationId, setSelectedCongregationId] = useState<string>('all');
@@ -370,6 +383,7 @@ export default function App() {
           onResetData={StorageService.resetAllData}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
+          currentUser={user}
         />
 
         {/* View Content */}
@@ -491,10 +505,7 @@ export default function App() {
           )}
 
           {currentView === 'chat' && (
-            <ChatView
-              chatMessages={chatMessages}
-              onSendMessage={handleSendChatMessage}
-            />
+            <ChatView />
           )}
         </main>
       </div>

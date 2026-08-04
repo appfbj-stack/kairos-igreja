@@ -40,6 +40,21 @@ async function main() {
   console.log("✅ Admin criado:", admin.email);
   console.log("   Senha: admin123");
 
+  // Outros usuários para testar o chat
+  const extraUsers = [
+    { name: "Secretaria Sede", email: "secretaria@kairos.com", role: "OPERADOR" },
+    { name: "Pastor Filial Norte", email: "pastor.norte@kairos.com", role: "GERENTE" },
+    { name: "Líder João", email: "joao@kairos.com", role: "USUARIO" },
+  ];
+  for (const u of extraUsers) {
+    try {
+      await prisma.user.create({
+        data: { tenantId: tenant.id, name: u.name, email: u.email, passwordHash: hash, role: u.role as any },
+      });
+      console.log(`✅ Usuário criado: ${u.email} (senha: admin123)`);
+    } catch { console.log(`⚠️ Usuário já existe: ${u.email}`); }
+  }
+
   // Congregations
   try {
     const cong = await prisma.congregation.createMany({

@@ -8,8 +8,11 @@ import {
   Search,
   RotateCcw,
   Sparkles,
+  LogOut,
+  UserCircle,
 } from 'lucide-react';
 import { Congregation } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   onOpenMobileMenu: () => void;
@@ -20,6 +23,7 @@ interface HeaderProps {
   onResetData: () => void;
   searchTerm: string;
   onSearchChange: (term: string) => void;
+  currentUser?: { name: string; email: string; role: string };
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,9 +35,12 @@ export const Header: React.FC<HeaderProps> = ({
   onResetData,
   searchTerm,
   onSearchChange,
+  currentUser,
 }) => {
+  const { logout } = useAuth();
   const [showCongregationDropdown, setShowCongregationDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const selectedCongregation =
     congregations.find((c) => c.id === selectedCongregationId) || congregations[0];
@@ -187,6 +194,38 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
         </div>
+
+        {/* User menu + Logout */}
+        {currentUser && (
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-[#f5f5f0] transition-colors"
+            >
+              <div className="w-7 h-7 rounded-full bg-[#5a5a40] flex items-center justify-center">
+                <UserCircle className="w-5 h-5 text-amber-300" />
+              </div>
+              <span className="hidden sm:inline text-xs font-bold text-[#2a2a20] max-w-[120px] truncate">
+                {currentUser.name}
+              </span>
+            </button>
+            {showUserMenu && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-[#e0e0d0] py-2 z-50 text-xs">
+                <div className="px-3 py-2 border-b border-[#e0e0d0]">
+                  <p className="font-bold text-[#2a2a20]">{currentUser.name}</p>
+                  <p className="text-[10px] text-[#8a8a70] truncate">{currentUser.email}</p>
+                </div>
+                <button
+                  onClick={() => { logout(); setShowUserMenu(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Sair
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Quick Add Button */}
         <button

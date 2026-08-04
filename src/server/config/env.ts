@@ -7,7 +7,6 @@ export const env = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "7d",
   PORT: parseInt(process.env.PORT || "3000"),
   NODE_ENV: process.env.NODE_ENV || "development",
-  GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
   APP_URL: process.env.APP_URL || "http://localhost:3000",
   BACKUP_DIR: process.env.BACKUP_DIR || "./backups",
 } as const;
