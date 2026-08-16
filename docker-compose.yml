@@ -10,7 +10,7 @@ services:
       - PORT=3000
       # JWT secret (mesmo do .env, exposto via Dokploy/Caddy futuramente)
       - JWT_SECRET=${JWT_SECRET:-kairos-igreja-jwt-secret-2026-rotate-em-prod-X9k2mP4qL8nR}
-      - APP_URL=${APP_URL:-https://kairos-igreja.fbautomacao.space}
+      - APP_URL=${APP_URL:-https://igrejasede.fbautomacao.space}
       # Conexão com o Postgres compartilhado (kairos-shared-pg)
       - DATABASE_URL=postgresql://kairos_igreja_user:tMDDYehRWOkhaojneP662TI6KIoSvoCQ@kairos-shared-pg:5432/kairos_igreja_db
     volumes:
