@@ -381,9 +381,15 @@ model Asset {
   id        String   @id @default(uuid())
   tenantId  String
   name      String
-  type      String   // image, document, etc
+  type      String   // image, document, mobilia, som, etc
   url       String
   size      Int?
+  category  String?  // Categoria legada (mobilia, som, instrumento, ti, etc)
+  condition String?  // Estado de conservacao
+  estimatedValue Float?
+  location  String?  // Onde esta guardado
+  notes     String?
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   deletedAt DateTime?
