@@ -1,21 +1,21 @@
 import "dotenv/config";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../../../generated/prisma/client";
 
-// Para trocar de SQLite → PostgreSQL:
-// 1. npm install @prisma/adapter-pg
-// 2. Alterar provider no schema.prisma para "postgresql"
-// 3. Alterar DATABASE_URL no .env
-// 4. Trocar adapter:
-//    import { PrismaPg } from "@prisma/adapter-pg"
-//    new PrismaPg({ url: process.env.DATABASE_URL })
-// 5. Rodar: npx prisma migrate deploy
+// Kairos Igreja usa o Postgres compartilhado do Dokploy
+// (kairos-shared-pg). DATABASE_URL vem do .env / docker-compose.
+//
+// Para trocar pra um Postgres dedicado no futuro, basta mudar
+// a variável DATABASE_URL — o adapter e o schema já são Postgres.
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 function createPrismaClient() {
-  const url = process.env.DATABASE_URL || "file:./data/kairos.db";
-  const adapter = new PrismaBetterSqlite3({ url });
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error("DATABASE_URL não definida — verifique o .env ou as variáveis de ambiente do container.");
+  }
+  const adapter = new PrismaPg({ connectionString: url });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],

@@ -1,20 +1,37 @@
 services:
   kairos-igreja:
     build: .
-    container_name: kairos-igreja
+    container_name: kairos-igreja-app
     restart: unless-stopped
     ports:
       - "3012:3000"
     environment:
       - NODE_ENV=production
-      - JWT_SECRET=${JWT_SECRET:-kairos-secret-change-me}
-      - APP_URL=${APP_URL:-http://187.77.229.227:3012}
+      - PORT=3000
+      # JWT secret (mesmo do .env, exposto via Dokploy/Caddy futuramente)
+      - JWT_SECRET=${JWT_SECRET:-kairos-igreja-jwt-secret-2026-rotate-em-prod-X9k2mP4qL8nR}
+      - APP_URL=${APP_URL:-https://kairos-igreja.fbautomacao.space}
+      # Conexão com o Postgres compartilhado (kairos-shared-pg)
+      - DATABASE_URL=postgresql://kairos_igreja_user:tMDDYehRWOkhaojneP662TI6KIoSvoCQ@kairos-shared-pg:5432/kairos_igreja_db
     volumes:
-      - ./data:/app/data
-      - ./backups:/app/backups
+      - kairos-igreja-backups:/app/backups
     networks:
-      - dokploy-network
+      - bridge
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
+volumes:
+  kairos-igreja-backups:
+    name: kairos-igreja-backups
+
+# O container se conecta à rede `bridge` (default) onde já está
+# o `kairos-shared-pg`, permitindo acessar o Postgres via DNS:
+#   kairos-shared-pg:5432
 networks:
-  dokploy-network:
+  bridge:
+    name: bridge
     external: true

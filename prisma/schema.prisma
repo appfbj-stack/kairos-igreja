@@ -1,6 +1,6 @@
 // Prisma Schema — Kairos Igreja
-// Provider: SQLite → Futuro: PostgreSQL
-// Basta trocar "sqlite" por "postgresql" e DATABASE_URL
+// Provider: PostgreSQL (kairos-shared-pg do Dokploy)
+// A connection string fica em prisma.config.ts (Prisma 7)
 
 generator client {
   provider = "prisma-client"
@@ -8,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ============================================================
@@ -129,6 +129,16 @@ model Member {
   memberSince    DateTime?
   photoUrl       String?
   notes          String?
+  // Campos ricos do app (cadastro pastoral completo)
+  status         String    @default("membro")
+  role           String?
+  cpf            String?
+  filiation      String?
+  cardValidity   DateTime?
+  baptismDate    DateTime?
+  celulaId       String?
+  ministries     String?
+  joinedAt       DateTime  @default(now())
   active         Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -141,6 +151,7 @@ model Member {
   @@index([congregationId])
   @@index([active])
   @@index([name])
+  @@index([status])
 }
 
 // ============================================================

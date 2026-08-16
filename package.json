@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "npx prisma generate && tsx src/server/server.ts",
-    "build": "npx prisma generate && vite build && esbuild src/server/server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "npx prisma generate && vite build && esbuild src/server/server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs --define:import.meta.url='\"file:///app/dist/server.cjs\"'",
     "start": "node dist/server.cjs",
     "db:migrate": "npx prisma migrate dev --name init",
     "db:push": "npx prisma db push",
@@ -17,7 +17,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@prisma/adapter-better-sqlite3": "^7.9.1",
+    "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.0.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
@@ -28,6 +28,7 @@
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "pg": "^8.13.1",
     "prisma": "^7.0.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",

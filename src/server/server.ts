@@ -6,6 +6,7 @@ import { env } from "./config/env";
 import { authRoutes } from "./modules/auth/auth.routes";
 import { memberRoutes } from "./modules/members/member.routes";
 import { chatRoutes } from "./modules/chat/chat.routes";
+import { createCrudRouter } from "./modules/_crud";
 
 async function startServer() {
   const app = express();
@@ -22,24 +23,24 @@ async function startServer() {
   app.use("/api/members", memberRoutes);
   app.use("/api/chat", chatRoutes);
 
-  // TODO: Adicionar rotas dos demais módulos
-  // app.use("/api/celulas", celulaRoutes);
-  // app.use("/api/congregations", congregationRoutes);
-  // app.use("/api/ministries", ministryRoutes);
-  // app.use("/api/events", eventRoutes);
-  // app.use("/api/finances", financeRoutes);
-  // app.use("/api/prayers", prayerRoutes);
-  // app.use("/api/sermons", sermonRoutes);
-  // app.use("/api/volunteers", volunteerRoutes);
-  // app.use("/api/murals", muralRoutes);
-  // app.use("/api/chat", chatRoutes);
-  // app.use("/api/backup", backupRoutes);
+  // Rotas CRUD genéricas (multi-tenant, soft-delete, busca, paginação)
+  app.use("/api/celulas", createCrudRouter("celula", ["name", "leaderName"]));
+  app.use("/api/congregations", createCrudRouter("congregation", ["name", "pastorName"]));
+  app.use("/api/ministries", createCrudRouter("ministry", ["name", "leaderName"]));
+  app.use("/api/events", createCrudRouter("event", ["title", "location", "type"]));
+  app.use("/api/finances", createCrudRouter("financialTransaction", ["description", "category"]));
+  app.use("/api/prayers", createCrudRouter("prayerRequest", ["name", "request"]));
+  app.use("/api/sermons", createCrudRouter("sermon", ["title", "theme", "passage"]));
+  app.use("/api/volunteers", createCrudRouter("volunteerRoster", ["name", "ministry", "role"]));
+  app.use("/api/murals", createCrudRouter("muralNotice", ["title", "content"]));
+  app.use("/api/assets", createCrudRouter("asset", ["name", "type"]));
 
   // ==========================================
   // Health check
   // ==========================================
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", app: "Kairos Church Platform", db: "SQLite", auth: "JWT" });
+    const dbKind = (env.DATABASE_URL || "").startsWith("postgres") ? "PostgreSQL" : "SQLite";
+    res.json({ status: "ok", app: "Kairos Church Platform", db: dbKind, auth: "JWT" });
   });
 
   // ==========================================
@@ -63,8 +64,9 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
+    const dbKind = (env.DATABASE_URL || "").startsWith("postgres") ? "PostgreSQL" : "SQLite";
     console.log(`Kairos Church API running on http://localhost:${PORT}`);
-    console.log(`  DB: SQLite | Auth: JWT | Multi-tenant`);
+    console.log(`  DB: ${dbKind} | Auth: JWT | Multi-tenant`);
   });
 }
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { QuickActionModal } from './components/QuickActionModal';
@@ -25,7 +25,10 @@ import { MuralView } from './components/views/MuralView';
 import { ChatView } from './components/views/ChatView';
 
 import { MemberModal } from './components/MemberModal';
-import { StorageService } from './services/storage';
+
+// Services
+import { dataService } from './services/dataService';
+
 import {
   ViewMode,
   Member,
@@ -39,7 +42,6 @@ import {
   Sermon,
   VolunteerRoster,
   MuralNotice,
-  ChatMessage,
 } from './types';
 
 export default function App() {
@@ -51,7 +53,7 @@ export default function App() {
 }
 
 function AppInner() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   if (!user) return <Login />;
 
   const [currentView, setCurrentView] = useState<ViewMode>('dashboard');
@@ -65,7 +67,11 @@ function AppInner() {
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
-  // App Data State initialized from LocalStorage
+  // Loading e erro
+  const [loadingData, setLoadingData] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
+
+  // Estados — alimentados pela API
   const [congregations, setCongregations] = useState<Congregation[]>([]);
   const [celulas, setCelulas] = useState<Celula[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -77,124 +83,357 @@ function AppInner() {
   const [sermons, setSermons] = useState<Sermon[]>([]);
   const [rosters, setRosters] = useState<VolunteerRoster[]>([]);
   const [murals, setMurals] = useState<MuralNotice[]>([]);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
-  // Load Data on Mount
+  /**
+   * Carrega tudo em paralelo. Se QUALQUER falhar (ex.: token expirou), aborta.
+   */
+  const loadAll = useCallback(async () => {
+    setLoadingData(true);
+    setDataError(null);
+    try {
+      const [
+        congregationsRes,
+        celulasRes,
+        membersRes,
+        assetsRes,
+        ministriesRes,
+        eventsRes,
+        financesRes,
+        prayersRes,
+        sermonsRes,
+        rostersRes,
+        muralsRes,
+      ] = await Promise.all([
+        dataService.list<any>('congregations', { limit: 200 }),
+        dataService.list<any>('celulas', { limit: 200 }),
+        dataService.list<any>('members', { limit: 200 }),
+        dataService.list<any>('assets', { limit: 200 }),
+        dataService.list<any>('ministries', { limit: 200 }),
+        dataService.list<any>('events', { limit: 200 }),
+        dataService.list<any>('finances', { limit: 200 }),
+        dataService.list<any>('prayers', { limit: 200 }),
+        dataService.list<any>('sermons', { limit: 200 }),
+        dataService.list<any>('volunteers', { limit: 200 }),
+        dataService.list<any>('murals', { limit: 200 }),
+      ]);
+
+      // Hidrata campos ricos do frontend a partir do JSON
+      const toMember = (m: any): Member => ({
+        ...m,
+        ministries: m.ministries ? safeParseArray(m.ministries) : [],
+        // Defaults visuais quando o backend não tem o campo
+        status: m.status ?? 'membro',
+        joinedAt: m.joinedAt ? String(m.joinedAt).split('T')[0] : new Date().toISOString().split('T')[0],
+        congregationId: m.congregationId ?? '',
+      });
+
+      const toCelula = (c: any): Celula => ({
+        id: c.id,
+        name: c.name,
+        leaderName: c.leaderName ?? '',
+        leaderPhone: c.leaderPhone ?? '',
+        hostName: c.hostName ?? '',
+        address: c.address ?? '',
+        neighborhood: c.neighborhood ?? '',
+        dayOfWeek: c.meetingDay ?? '',
+        time: c.meetingTime ?? '',
+        congregationId: c.congregationId ?? '',
+        membersCount: c.membersCount ?? 0,
+        category: c.category ?? 'Mista',
+      });
+
+      const toCongregation = (c: any): Congregation => ({
+        id: c.id,
+        name: c.name,
+        isHeadquarters: c.isHeadquarters ?? false,
+        leadPastor: c.pastorName ?? '',
+        address: c.address ?? '',
+        city: c.city ?? '',
+        phone: c.phone ?? '',
+        membersCount: c.membersCount ?? 0,
+        celulasCount: c.celulasCount ?? 0,
+        servicesSchedule: safeParseArray(c.servicesSchedule),
+      });
+
+      const toAsset = (a: any): Asset => ({
+        id: a.id,
+        name: a.name,
+        category: a.category ?? 'Outros',
+        quantity: a.quantity ?? 1,
+        estimatedValue: a.estimatedValue,
+        condition: a.condition ?? 'Bom',
+        congregationId: a.congregationId ?? '',
+        locationDetails: a.locationDetails,
+        acquisitionDate: a.acquisitionDate,
+        notes: a.notes,
+      });
+
+      const toMinistry = (m: any): Ministry => ({
+        id: m.id,
+        name: m.name,
+        description: m.description ?? '',
+        leaderName: m.leaderName ?? '',
+        membersCount: m.membersCount ?? 0,
+        color: m.color ?? '#5a5a40',
+        iconName: m.iconName ?? 'users',
+        activeTasks: m.activeTasks ?? 0,
+      });
+
+      const toEvent = (e: any): EventItem => ({
+        id: e.id,
+        title: e.title,
+        type: e.type ?? 'Culto',
+        date: e.date ? String(e.date).split('T')[0] : '',
+        time: e.time ?? '',
+        location: e.location ?? '',
+        congregationId: e.congregationId ?? '',
+        description: e.description ?? '',
+        registeredCount: e.registeredCount ?? 0,
+        capacity: e.capacity,
+        speaker: e.speaker,
+        bannerUrl: e.bannerUrl,
+      });
+
+      const toFinance = (f: any): FinancialTransaction => {
+        // No schema: type = ENTRADA | SAIDA. No front: 'receita' | 'despesa'
+        const t = String(f.type).toUpperCase() === 'ENTRADA' ? 'receita' : 'despesa';
+        return {
+          id: f.id,
+          type: t as 'receita' | 'despesa',
+          category: f.category ?? 'Outros',
+          amount: Number(f.amount ?? 0),
+          description: f.description ?? '',
+          date: f.date ? String(f.date).split('T')[0] : '',
+          congregationId: f.congregationId ?? '',
+          paymentMethod: f.paymentMethod ?? 'Pix',
+          donorName: f.donorName,
+        };
+      };
+
+      const toPrayer = (p: any): PrayerRequest => ({
+        id: p.id,
+        authorName: p.name ?? p.authorName ?? 'Anônimo',
+        isAnonymous: p.isAnonymous ?? false,
+        category: p.category ?? 'Outro',
+        title: p.title ?? 'Pedido de Oração',
+        description: p.request ?? p.description ?? '',
+        date: p.createdAt ? String(p.createdAt).split('T')[0] : '',
+        prayedCount: p.prayedCount ?? 0,
+        status: p.answered ? 'atendido' : (p.status ?? 'em_oracao'),
+        testimony: p.testimony,
+      });
+
+      const toSermon = (s: any): Sermon => ({
+        id: s.id,
+        title: s.title,
+        preacher: s.preacher ?? 'Pr. Lucas Andrade',
+        series: s.series,
+        date: s.createdAt ? String(s.createdAt).split('T')[0] : '',
+        biblePassage: s.passage ?? '',
+        summary: s.introduction ?? '',
+        videoUrl: s.videoUrl,
+        audioUrl: s.audioUrl,
+        outlinePdfUrl: s.outlinePdfUrl,
+        tags: s.tags ? safeParseArray(s.tags) : [],
+        viewsCount: s.viewsCount ?? 0,
+      });
+
+      const toRoster = (r: any): VolunteerRoster => ({
+        id: r.id,
+        date: r.date ?? '',
+        serviceName: r.serviceName ?? '',
+        ministryId: r.ministryId ?? '',
+        ministryName: r.ministry ?? '',
+        volunteerName: r.name ?? '',
+        role: r.role ?? '',
+        status: r.status ?? 'pendente',
+        notes: r.notes,
+      });
+
+      const toMural = (m: any): MuralNotice => ({
+        id: m.id,
+        title: m.title,
+        content: m.content,
+        authorName: m.authorName ?? 'Liderança',
+        authorRole: m.authorRole ?? 'Pastor',
+        date: m.createdAt ? String(m.createdAt).split('T')[0] : '',
+        isPinned: m.isPinned ?? false,
+        category: m.category ?? 'Aviso Geral',
+        likesCount: m.likesCount ?? 0,
+        commentsCount: m.commentsCount ?? 0,
+      });
+
+      setCongregations(congregationsRes.data.map(toCongregation));
+      setCelulas(celulasRes.data.map(toCelula));
+      setMembers(membersRes.data.map(toMember));
+      setAssets(assetsRes.data.map(toAsset));
+      setMinistries(ministriesRes.data.map(toMinistry));
+      setEvents(eventsRes.data.map(toEvent));
+      setFinances(financesRes.data.map(toFinance));
+      setPrayers(prayersRes.data.map(toPrayer));
+      setSermons(sermonsRes.data.map(toSermon));
+      setRosters(rostersRes.data.map(toRoster));
+      setMurals(muralsRes.data.map(toMural));
+    } catch (e: any) {
+      console.error('Falha ao carregar dados:', e);
+      setDataError(e.message || 'Erro ao carregar dados');
+      // Se 401, força logout
+      if (String(e.message).toLowerCase().includes('token')) {
+        logout();
+      }
+    } finally {
+      setLoadingData(false);
+    }
+  }, [logout]);
+
   useEffect(() => {
-    setCongregations(StorageService.getCongregations());
-    setCelulas(StorageService.getCelulas());
-    setMembers(StorageService.getMembers());
-    setAssets(StorageService.getAssets());
-    setMinistries(StorageService.getMinistries());
-    setEvents(StorageService.getEvents());
-    setFinances(StorageService.getFinances());
-    setPrayers(StorageService.getPrayers());
-    setSermons(StorageService.getSermons());
-    setRosters(StorageService.getRosters());
-    setMurals(StorageService.getMurals());
-    setChatMessages(StorageService.getChatMessages());
-  }, []);
+    if (user) loadAll();
+  }, [user, loadAll]);
 
-  // Handlers for Congregations CRUD
-  const handleAddCongregation = (newCong: Omit<Congregation, 'id'>) => {
+  // ======================================================
+  // Handlers — Congregações
+  // ======================================================
+  const handleAddCongregation = async (newCong: Omit<Congregation, 'id'>) => {
+    const created = await dataService.create<any>('congregations', {
+      name: newCong.name,
+      address: newCong.address,
+      phone: newCong.phone,
+      pastorName: newCong.leadPastor,
+      isHeadquarters: newCong.isHeadquarters,
+    });
     const item: Congregation = {
       ...newCong,
-      id: `cong-${Date.now()}`,
+      id: created.id,
     };
-
-    // If new item is set as headquarters, update other items
     let updated = [...congregations];
     if (item.isHeadquarters) {
       updated = updated.map((c) => ({ ...c, isHeadquarters: false }));
+      // se houver mais congregações, também desmarcá-las no backend
+      for (const c of updated) {
+        if (c.id !== item.id) {
+          try { await dataService.update('congregations', c.id, { isHeadquarters: false }); } catch {}
+        }
+      }
     }
     updated.push(item);
-
     setCongregations(updated);
-    StorageService.setCongregations(updated);
   };
 
-  const handleUpdateCongregation = (updatedCong: Congregation) => {
+  const handleUpdateCongregation = async (updatedCong: Congregation) => {
+    await dataService.update('congregations', updatedCong.id, {
+      name: updatedCong.name,
+      address: updatedCong.address,
+      phone: updatedCong.phone,
+      pastorName: updatedCong.leadPastor,
+      isHeadquarters: updatedCong.isHeadquarters,
+    });
     let updated = congregations.map((c) => {
       if (updatedCong.isHeadquarters && c.id !== updatedCong.id) {
         return { ...c, isHeadquarters: false };
       }
       return c.id === updatedCong.id ? updatedCong : c;
     });
-
+    // se desmarcou outra, propaga
+    for (const c of updated) {
+      if (c.id !== updatedCong.id && c.isHeadquarters) {
+        try { await dataService.update('congregations', c.id, { isHeadquarters: false }); } catch {}
+      }
+    }
     setCongregations(updated);
-    StorageService.setCongregations(updated);
   };
 
-  const handleDeleteCongregation = (id: string) => {
+  const handleDeleteCongregation = async (id: string) => {
     if (congregations.length <= 1) {
       alert('Você precisa ter pelo menos uma congregação cadastrada no sistema.');
       return;
     }
-    const updated = congregations.filter((c) => c.id !== id);
-    setCongregations(updated);
-    StorageService.setCongregations(updated);
-    if (selectedCongregationId === id) {
-      setSelectedCongregationId('all');
-    }
+    await dataService.remove('congregations', id);
+    setCongregations(congregations.filter((c) => c.id !== id));
+    if (selectedCongregationId === id) setSelectedCongregationId('all');
   };
 
-  // Handlers for Assets
-  const handleAddAsset = (newAst: Partial<Asset>) => {
-    const item: Asset = {
-      id: `ast-${Date.now()}`,
+  // ======================================================
+  // Handlers — Assets
+  // ======================================================
+  const handleAddAsset = async (newAst: Partial<Asset>) => {
+    const created = await dataService.create<any>('assets', {
       name: newAst.name || 'Novo Item de Patrimônio',
       category: newAst.category || 'Equipamento de Som',
       quantity: newAst.quantity || 1,
       estimatedValue: newAst.estimatedValue,
       condition: newAst.condition || 'Excelente',
-      congregationId: newAst.congregationId || congregations[0]?.id || 'cong-1',
+      congregationId: newAst.congregationId || congregations[0]?.id,
+      locationDetails: newAst.locationDetails,
+      acquisitionDate: newAst.acquisitionDate,
+      notes: newAst.notes,
+      type: 'outros',
+    });
+    const item: Asset = {
+      id: created.id,
+      name: newAst.name || 'Novo Item de Patrimônio',
+      category: (newAst.category as any) || 'Equipamento de Som',
+      quantity: newAst.quantity || 1,
+      estimatedValue: newAst.estimatedValue,
+      condition: (newAst.condition as any) || 'Excelente',
+      congregationId: newAst.congregationId || congregations[0]?.id || '',
       locationDetails: newAst.locationDetails,
       acquisitionDate: newAst.acquisitionDate,
       notes: newAst.notes,
     };
-    const updated = [item, ...assets];
-    setAssets(updated);
-    StorageService.setAssets(updated);
+    setAssets([item, ...assets]);
   };
 
-  const handleUpdateAsset = (updatedAst: Asset) => {
-    const updated = assets.map((a) => (a.id === updatedAst.id ? updatedAst : a));
-    setAssets(updated);
-    StorageService.setAssets(updated);
+  const handleUpdateAsset = async (updatedAst: Asset) => {
+    await dataService.update('assets', updatedAst.id, updatedAst);
+    setAssets(assets.map((a) => (a.id === updatedAst.id ? updatedAst : a)));
   };
 
-  const handleDeleteAsset = (id: string) => {
-    const updated = assets.filter((a) => a.id !== id);
-    setAssets(updated);
-    StorageService.setAssets(updated);
+  const handleDeleteAsset = async (id: string) => {
+    await dataService.remove('assets', id);
+    setAssets(assets.filter((a) => a.id !== id));
   };
 
-  // Handlers for Members
-  const handleSaveMember = (memberData: Omit<Member, 'id'> | Member) => {
+  // ======================================================
+  // Handlers — Members
+  // ======================================================
+  const handleSaveMember = async (memberData: Omit<Member, 'id'> | Member) => {
     if ('id' in memberData && memberData.id) {
-      const updated = members.map((m) => (m.id === memberData.id ? (memberData as Member) : m));
-      setMembers(updated);
-      StorageService.setMembers(updated);
+      // UPDATE
+      const payload = serializeMember(memberData);
+      await dataService.update('members', memberData.id, payload);
+      setMembers(members.map((m) => (m.id === memberData.id ? (memberData as Member) : m)));
     } else {
+      // CREATE
+      const payload = serializeMember(memberData);
+      const created = await dataService.create<any>('members', payload);
       const newMember: Member = {
-        ...memberData,
-        id: `mem-${Date.now()}`,
-        joinedAt: memberData.joinedAt || new Date().toISOString().split('T')[0],
-      } as Member;
-      const updated = [newMember, ...members];
-      setMembers(updated);
-      StorageService.setMembers(updated);
+        ...(memberData as Omit<Member, 'id'>),
+        id: created.id,
+        joinedAt: (memberData as any).joinedAt || new Date().toISOString().split('T')[0],
+      };
+      setMembers([newMember, ...members]);
     }
   };
 
-  const handleAddMember = (newMem: Partial<Member>) => {
-    const item: Member = {
-      id: `mem-${Date.now()}`,
+  const handleAddMember = async (newMem: Partial<Member>) => {
+    const payload = serializeMember({
+      ...newMem,
       name: newMem.name || 'Novo Membro',
       email: newMem.email || '',
       phone: newMem.phone || '',
       status: newMem.status || 'membro',
-      congregationId: newMem.congregationId || congregations[0]?.id || 'cong-1',
+      congregationId: newMem.congregationId || congregations[0]?.id || '',
+      ministries: newMem.ministries || [],
+      joinedAt: new Date().toISOString().split('T')[0],
+    });
+    const created = await dataService.create<any>('members', payload);
+    const item: Member = {
+      id: created.id,
+      name: newMem.name || 'Novo Membro',
+      email: newMem.email || '',
+      phone: newMem.phone || '',
+      status: (newMem.status as any) || 'membro',
+      congregationId: newMem.congregationId || congregations[0]?.id || '',
       celulaId: newMem.celulaId,
       address: newMem.address,
       birthDate: newMem.birthDate,
@@ -204,164 +443,240 @@ function AppInner() {
       cardValidity: newMem.cardValidity,
       photoUrl: newMem.photoUrl,
       ministries: newMem.ministries || [],
+      role: newMem.role,
       joinedAt: new Date().toISOString().split('T')[0],
     };
-    const updated = [item, ...members];
-    setMembers(updated);
-    StorageService.setMembers(updated);
+    setMembers([item, ...members]);
   };
 
-  const handleDeleteMember = (id: string) => {
-    const updated = members.filter((m) => m.id !== id);
-    setMembers(updated);
-    StorageService.setMembers(updated);
+  const handleDeleteMember = async (id: string) => {
+    await dataService.remove('members', id);
+    setMembers(members.filter((m) => m.id !== id));
   };
 
-  const handleBatchAddMembers = (newMembers: Member[]) => {
-    const updated = [...newMembers, ...members];
-    setMembers(updated);
-    StorageService.setMembers(updated);
+  const handleBatchAddMembers = async (newMembers: Member[]) => {
+    const created: Member[] = [];
+    for (const m of newMembers) {
+      try {
+        const payload = serializeMember(m);
+        const c = await dataService.create<any>('members', payload);
+        created.push({ ...m, id: c.id });
+      } catch (e) {
+        console.error('Falha ao criar membro do batch:', m.name, e);
+      }
+    }
+    setMembers([...created, ...members]);
   };
 
-  // Handlers for Celulas
-  const handleAddCelula = (newCel: Partial<Celula>) => {
-    const item: Celula = {
-      id: `cel-${Date.now()}`,
+  // ======================================================
+  // Handlers — Células
+  // ======================================================
+  const handleAddCelula = async (newCel: Partial<Celula>) => {
+    const payload = {
       name: newCel.name || 'Nova Célula',
-      leaderName: newCel.leaderName || 'Líder',
-      leaderPhone: newCel.leaderPhone || '',
-      hostName: newCel.hostName || 'Anfitrião',
-      address: newCel.address || 'Endereço',
-      neighborhood: newCel.neighborhood || 'Bairro',
+      leaderName: newCel.leaderName,
+      meetingDay: newCel.dayOfWeek,
+      meetingTime: newCel.time,
+      address: newCel.address,
+      congregationId: newCel.congregationId || congregations[0]?.id,
+      category: newCel.category,
+    };
+    const created = await dataService.create<any>('celulas', payload);
+    const item: Celula = {
+      id: created.id,
+      name: newCel.name || 'Nova Célula',
+      leaderName: newCel.leaderName || '',
+      leaderPhone: (newCel as any).leaderPhone || '',
+      hostName: (newCel as any).hostName || '',
+      address: newCel.address || '',
+      neighborhood: (newCel as any).neighborhood || '',
       dayOfWeek: newCel.dayOfWeek || 'Quinta-feira',
       time: newCel.time || '20:00h',
-      congregationId: newCel.congregationId || congregations[0]?.id || 'cong-1',
-      membersCount: newCel.membersCount || 1,
-      category: newCel.category || 'Jovens',
+      congregationId: newCel.congregationId || congregations[0]?.id || '',
+      membersCount: (newCel as any).membersCount ?? 1,
+      category: (newCel.category as any) || 'Mista',
     };
-    const updated = [item, ...celulas];
-    setCelulas(updated);
-    StorageService.setCelulas(updated);
+    setCelulas([item, ...celulas]);
   };
 
-  const handleUpdateCelula = (updatedCel: Celula) => {
-    const updated = celulas.map((c) => (c.id === updatedCel.id ? updatedCel : c));
-    setCelulas(updated);
-    StorageService.setCelulas(updated);
+  const handleUpdateCelula = async (updatedCel: Celula) => {
+    await dataService.update('celulas', updatedCel.id, {
+      name: updatedCel.name,
+      leaderName: updatedCel.leaderName,
+      meetingDay: updatedCel.dayOfWeek,
+      meetingTime: updatedCel.time,
+      address: updatedCel.address,
+      congregationId: updatedCel.congregationId,
+    });
+    setCelulas(celulas.map((c) => (c.id === updatedCel.id ? updatedCel : c)));
   };
 
-  const handleDeleteCelula = (id: string) => {
-    const updated = celulas.filter((c) => c.id !== id);
-    setCelulas(updated);
-    StorageService.setCelulas(updated);
+  const handleDeleteCelula = async (id: string) => {
+    await dataService.remove('celulas', id);
+    setCelulas(celulas.filter((c) => c.id !== id));
   };
 
-  // Handlers for Finances
-  const handleAddFinance = (newFin: Partial<FinancialTransaction>) => {
+  // ======================================================
+  // Handlers — Finanças
+  // ======================================================
+  const handleAddFinance = async (newFin: Partial<FinancialTransaction>) => {
+    const payload = {
+      type: newFin.type === 'despesa' ? 'SAIDA' : 'ENTRADA',
+      description: newFin.description || 'Lançamento',
+      amount: newFin.amount || 0,
+      category: newFin.category || 'Outros',
+      date: newFin.date ? new Date(newFin.date) : new Date(),
+      congregationId: congregations[0]?.id,
+    };
+    const created = await dataService.create<any>('finances', payload);
     const item: FinancialTransaction = {
-      id: `fin-${Date.now()}`,
-      type: newFin.type || 'receita',
-      category: newFin.category || 'Dízimo',
+      id: created.id,
+      type: (newFin.type as any) || 'receita',
+      category: (newFin.category as any) || 'Dízimo',
       amount: newFin.amount || 0,
       description: newFin.description || 'Lançamento',
       date: newFin.date || new Date().toISOString().split('T')[0],
-      congregationId: congregations[0]?.id || 'cong-1',
+      congregationId: congregations[0]?.id || '',
       paymentMethod: 'Pix',
     };
-    const updated = [item, ...finances];
-    setFinances(updated);
-    StorageService.setFinances(updated);
+    setFinances([item, ...finances]);
   };
 
-  // Handlers for Prayer
-  const handleAddPrayer = (newPrayer: Partial<PrayerRequest>) => {
+  // ======================================================
+  // Handlers — Oração
+  // ======================================================
+  const handleAddPrayer = async (newPrayer: Partial<PrayerRequest>) => {
+    const payload = {
+      name: newPrayer.authorName || 'Anônimo',
+      request: newPrayer.description || newPrayer.title || '',
+      category: newPrayer.category,
+      title: newPrayer.title,
+    };
+    const created = await dataService.create<any>('prayers', payload);
     const item: PrayerRequest = {
-      id: `pr-${Date.now()}`,
+      id: created.id,
       authorName: newPrayer.authorName || 'Anônimo',
       isAnonymous: newPrayer.isAnonymous || false,
-      category: newPrayer.category || 'Saúde',
+      category: (newPrayer.category as any) || 'Saúde',
       title: newPrayer.title || 'Pedido de Oração',
       description: newPrayer.description || '',
       date: newPrayer.date || new Date().toISOString().split('T')[0],
       prayedCount: 1,
       status: 'em_oracao',
     };
-    const updated = [item, ...prayers];
-    setPrayers(updated);
-    StorageService.setPrayers(updated);
+    setPrayers([item, ...prayers]);
   };
 
-  const handlePrayForRequest = (id: string) => {
-    const updated = prayers.map((p) => (p.id === id ? { ...p, prayedCount: p.prayedCount + 1 } : p));
-    setPrayers(updated);
-    StorageService.setPrayers(updated);
+  const handlePrayForRequest = async (id: string) => {
+    const current = prayers.find((p) => p.id === id);
+    if (!current) return;
+    const next = (current.prayedCount ?? 0) + 1;
+    try {
+      await dataService.update('prayers', id, { prayedCount: next });
+    } catch {
+      // backend não tem coluna de counter? tudo bem, atualiza local
+    }
+    setPrayers(prayers.map((p) => (p.id === id ? { ...p, prayedCount: next } : p)));
   };
 
-  const handleRegisterEvent = (eventId: string) => {
-    const updated = events.map((ev) =>
-      ev.id === eventId ? { ...ev, registeredCount: ev.registeredCount + 1 } : ev
-    );
-    setEvents(updated);
-    StorageService.setEvents(updated);
+  // ======================================================
+  // Handlers — Eventos
+  // ======================================================
+  const handleRegisterEvent = async (eventId: string) => {
+    const ev = events.find((e) => e.id === eventId);
+    if (!ev) return;
+    const next = (ev.registeredCount ?? 0) + 1;
+    setEvents(events.map((e) => (e.id === eventId ? { ...e, registeredCount: next } : e)));
   };
 
-  const handleUpdateRosterStatus = (
+  // ======================================================
+  // Handlers — Voluntários
+  // ======================================================
+  const handleUpdateRosterStatus = async (
     id: string,
     status: 'confirmado' | 'pendente' | 'recusado'
   ) => {
-    const updated = rosters.map((r) => (r.id === id ? { ...r, status } : r));
-    setRosters(updated);
-    StorageService.setRosters(updated);
+    setRosters(rosters.map((r) => (r.id === id ? { ...r, status } : r)));
   };
 
-  const handleLikeMural = (id: string) => {
-    const updated = murals.map((m) => (m.id === id ? { ...m, likesCount: m.likesCount + 1 } : m));
-    setMurals(updated);
-    StorageService.setMurals(updated);
+  // ======================================================
+  // Handlers — Mural
+  // ======================================================
+  const handleLikeMural = async (id: string) => {
+    setMurals(murals.map((m) => (m.id === id ? { ...m, likesCount: m.likesCount + 1 } : m)));
   };
 
-  // Handlers for Sermons
-  const handleAddSermon = (newSermon: Sermon) => {
-    const updated = [newSermon, ...sermons];
-    setSermons(updated);
-    StorageService.setSermons(updated);
-  };
-
-  const handleUpdateSermon = (updatedSermon: Sermon) => {
-    const updated = sermons.map((s) => (s.id === updatedSermon.id ? updatedSermon : s));
-    setSermons(updated);
-    StorageService.setSermons(updated);
-  };
-
-  const handleDeleteSermon = (id: string) => {
-    const updated = sermons.filter((s) => s.id !== id);
-    setSermons(updated);
-    StorageService.setSermons(updated);
-  };
-
-  const handleSendChatMessage = (channelId: string, text: string) => {
-    const newMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      channelId,
-      senderName: 'Você (Liderança)',
-      senderRole: 'Líder / Membro',
-      text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isStaff: true,
+  // ======================================================
+  // Handlers — Sermões
+  // ======================================================
+  const handleAddSermon = async (newSermon: Sermon) => {
+    const payload = {
+      title: newSermon.title,
+      preacher: newSermon.preacher,
+      passage: newSermon.biblePassage,
+      introduction: newSermon.summary,
     };
-    const updated = [...chatMessages, newMsg];
-    setChatMessages(updated);
-    StorageService.setChatMessages(updated);
+    try {
+      const created = await dataService.create<any>('sermons', payload);
+      setSermons([{ ...newSermon, id: created.id }, ...sermons]);
+    } catch (e) {
+      console.error('Falha ao criar sermão:', e);
+    }
   };
 
+  const handleUpdateSermon = async (updatedSermon: Sermon) => {
+    await dataService.update('sermons', updatedSermon.id, {
+      title: updatedSermon.title,
+      preacher: updatedSermon.preacher,
+      passage: updatedSermon.biblePassage,
+      introduction: updatedSermon.summary,
+    });
+    setSermons(sermons.map((s) => (s.id === updatedSermon.id ? updatedSermon : s)));
+  };
+
+  const handleDeleteSermon = async (id: string) => {
+    await dataService.remove('sermons', id);
+    setSermons(sermons.filter((s) => s.id !== id));
+  };
+
+  // ======================================================
+  // UI Helpers
+  // ======================================================
   const openQuickAction = (tabName: string) => {
     setQuickModalTab(tabName);
     setIsQuickModalOpen(true);
   };
 
+  if (loadingData) {
+    return (
+      <div className="min-h-screen bg-[#f5f5f0] flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block w-12 h-12 border-4 border-[#5a5a40] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-sm text-[#5a5a40] font-medium">Carregando dados do servidor…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (dataError) {
+    return (
+      <div className="min-h-screen bg-[#f5f5f0] flex items-center justify-center p-4">
+        <div className="max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">
+          <h2 className="text-lg font-bold text-red-600 mb-2">Erro ao carregar dados</h2>
+          <p className="text-sm text-[#2a2a20] mb-4">{dataError}</p>
+          <button
+            onClick={loadAll}
+            className="px-4 py-2 rounded-xl bg-[#5a5a40] text-white text-sm font-bold"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f5f5f0] text-[#2a2a20] font-sans antialiased flex">
-      {/* Sidebar Navigation */}
       <Sidebar
         currentView={currentView}
         onSelectView={setCurrentView}
@@ -371,22 +686,23 @@ function AppInner() {
         prayersCount={prayers.filter((p) => p.status === 'em_oracao').length}
       />
 
-      {/* Main Content Area */}
       <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
-        {/* Top Header */}
         <Header
           onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
           congregations={congregations}
           selectedCongregationId={selectedCongregationId}
           onSelectCongregation={setSelectedCongregationId}
           onOpenQuickModal={() => openQuickAction('membro')}
-          onResetData={StorageService.resetAllData}
+          onResetData={async () => {
+            if (confirm('Tem certeza? Esta ação vai recarregar todos os dados do servidor.')) {
+              await loadAll();
+            }
+          }}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           currentUser={user}
         />
 
-        {/* View Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           {currentView === 'dashboard' && (
             <DashboardView
@@ -504,13 +820,10 @@ function AppInner() {
             />
           )}
 
-          {currentView === 'chat' && (
-            <ChatView />
-          )}
+          {currentView === 'chat' && <ChatView />}
         </main>
       </div>
 
-      {/* Global Quick Action Modal */}
       <QuickActionModal
         isOpen={isQuickModalOpen}
         onClose={() => setIsQuickModalOpen(false)}
@@ -522,7 +835,6 @@ function AppInner() {
         onSavePrayer={handleAddPrayer}
       />
 
-      {/* Comprehensive Member Registration & Edit Modal */}
       <MemberModal
         isOpen={isMemberModalOpen}
         onClose={() => {
@@ -533,10 +845,49 @@ function AppInner() {
         initialData={editingMember}
         congregations={congregations}
         celulas={celulas}
-        onOpenBatchImport={() => {
-          setCurrentView('membros');
-        }}
+        onOpenBatchImport={() => setCurrentView('membros')}
       />
     </div>
   );
+}
+
+// ======================================================
+// Helpers
+// ======================================================
+function safeParseArray(json: any): any[] {
+  if (Array.isArray(json)) return json;
+  if (typeof json === 'string') {
+    try {
+      const parsed = JSON.parse(json);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function serializeMember(m: Partial<Member>): Record<string, any> {
+  const out: Record<string, any> = {};
+  if (m.name !== undefined) out.name = m.name;
+  if (m.email !== undefined) out.email = m.email;
+  if (m.phone !== undefined) out.phone = m.phone;
+  if (m.address !== undefined) out.address = m.address;
+  if (m.notes !== undefined) out.notes = m.notes;
+  if (m.photoUrl !== undefined) out.photoUrl = m.photoUrl;
+  if (m.cpf !== undefined) out.cpf = m.cpf;
+  if (m.filiation !== undefined) out.filiation = m.filiation;
+  if (m.role !== undefined) out.role = m.role;
+  if (m.status !== undefined) out.status = m.status;
+  if (m.congregationId !== undefined) out.congregationId = m.congregationId;
+  if (m.celulaId !== undefined) out.celulaId = m.celulaId;
+  if (m.maritalStatus !== undefined) out.maritalStatus = m.maritalStatus;
+  if (m.ministries !== undefined) out.ministries = JSON.stringify(m.ministries ?? []);
+  if (m.baptized !== undefined) out.baptized = !!m.baptized;
+  if (m.birthDate) out.birthDate = new Date(m.birthDate);
+  if (m.baptismDate) out.baptismDate = new Date(m.baptismDate);
+  if (m.cardValidity) out.cardValidity = new Date(m.cardValidity);
+  if (m.memberSince) out.memberSince = new Date(m.memberSince);
+  if (m.joinedAt) out.joinedAt = new Date(m.joinedAt);
+  return out;
 }
