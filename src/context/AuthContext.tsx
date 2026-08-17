@@ -6,6 +6,8 @@ interface AuthUser {
   name: string;
   email: string;
   role: string;
+  congregationId: string | null;
+  congregationName: string | null;
   tenant: { id: string; name: string; slug: string };
 }
 

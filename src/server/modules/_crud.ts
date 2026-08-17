@@ -1,22 +1,23 @@
 import { Router, Response } from "express";
 import { authMiddleware } from "../middleware/auth";
+import { requireScope, enforceCongregation, getScopeFilter, isGlobalRole } from "../middleware/access";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { prisma } from "../config/database";
 import { AuthRequest } from "../types";
 
 /**
- * Factory de rotas CRUD genéricas.
- * Funciona para qualquer model Prisma que tenha `tenantId` e `deletedAt`.
+ * Factory de rotas CRUD genéricas com controle de acesso por congregação.
  *
- * @param modelName  Nome do model no Prisma Client (ex: "celula", "member")
+ * Regras:
+ * - GET    → filtra por `getScopeFilter(req)` (multi-tenant + congregação)
+ * - POST   → força `congregationId` do user se não-admin
+ * - PUT    → valida que item pertence à congregação permitida
+ * - DELETE → valida que item pertence à congregação permitida
+ *
+ * Modelos SEM congregationId (ex: MuralNotice global) funcionam normalmente.
+ *
+ * @param modelName   Nome do model no Prisma Client (ex: "celula", "member")
  * @param searchFields Campos onde o `?search=` faz "contains" (OR). Vazio = sem busca.
- *
- * Endpoints gerados:
- *   GET    /            → lista (paginação + busca)
- *   GET    /:id         → item por id
- *   POST   /            → cria
- *   PUT    /:id         → atualiza
- *   DELETE /:id         → soft delete (deletedAt = now)
  */
 export function createCrudRouter(
   modelName: string,
@@ -29,18 +30,31 @@ export function createCrudRouter(
   router.get(
     "/",
     asyncHandler(async (req: AuthRequest, res: Response) => {
-      const tenantId = req.tenantId!;
+      const scope = getScopeFilter(req);
       const { search, page, limit, orderBy, orderDir } = req.query as Record<string, string | undefined>;
 
-      const where: any = { tenantId, deletedAt: null };
+      const where: any = { tenantId: scope.tenantId, deletedAt: null };
+      // Filtro de congregação: se user não é admin, aplica
+      if ("congregationId" in scope) {
+        // Mostra items da própria congregação OU itens globais (congregationId null)
+        if (scope.congregationId) {
+          where.OR = [
+            { congregationId: scope.congregationId },
+            { congregationId: null },
+          ];
+        } else {
+          // User sem congregação definida: vê só os globais do tenant
+          where.congregationId = null;
+        }
+      }
       if (search && searchFields.length > 0) {
-        where.OR = searchFields.map((f) => ({ [f]: { contains: search } }));
+        const searchOr = searchFields.map((f) => ({ [f]: { contains: search } }));
+        where.OR = where.OR ? [...where.OR, ...searchOr] : searchOr;
       }
 
       const pageNum = page ? Math.max(1, Number(page)) : 1;
       const limitNum = limit ? Math.min(100, Math.max(1, Number(limit))) : 200;
 
-      // ordem padrão
       const orderField = orderBy || "createdAt";
       const orderDirection = (orderDir as "asc" | "desc") || "desc";
 
@@ -70,11 +84,13 @@ export function createCrudRouter(
   router.get(
     "/:id",
     asyncHandler(async (req: AuthRequest, res: Response) => {
-      const tenantId = req.tenantId!;
+      const scope = getScopeFilter(req);
       const model = (prisma as any)[modelName];
-      const item = await model.findFirst({
-        where: { id: req.params.id, tenantId, deletedAt: null },
-      });
+      const where: any = { id: req.params.id, tenantId: scope.tenantId, deletedAt: null };
+      if ("congregationId" in scope && scope.congregationId) {
+        where.OR = [{ congregationId: scope.congregationId }, { congregationId: null }];
+      }
+      const item = await model.findFirst({ where });
       if (!item) {
         res.status(404).json({ success: false, error: "Item não encontrado" });
         return;
@@ -86,8 +102,10 @@ export function createCrudRouter(
   // POST / — create
   router.post(
     "/",
+    requireScope,
+    enforceCongregation,
     asyncHandler(async (req: AuthRequest, res: Response) => {
-      const tenantId = req.tenantId!;
+      const tenantId = req.user!.tenantId;
       const model = (prisma as any)[modelName];
       const { id: _ignore, createdAt: _c, updatedAt: _u, deletedAt: _d, ...cleanData } = req.body || {};
       try {
@@ -96,8 +114,6 @@ export function createCrudRouter(
         });
         res.status(201).json({ success: true, data: item });
       } catch (e: any) {
-        // Prisma 7 rejeita campos desconhecidos. Tenta de novo removendo os campos
-        // que o model não aceita.
         const msg = String(e?.message || "");
         const m = msg.match(/Unknown argument `([^`]+)`/);
         if (m) {
@@ -119,14 +135,15 @@ export function createCrudRouter(
   router.put(
     "/:id",
     asyncHandler(async (req: AuthRequest, res: Response) => {
-      const tenantId = req.tenantId!;
+      const scope = getScopeFilter(req);
       const { id: _i, tenantId: _t, createdAt: _c, updatedAt: _u, deletedAt: _d, ...cleanData } = req.body || {};
       const model = (prisma as any)[modelName];
+      const where: any = { id: req.params.id, tenantId: scope.tenantId, deletedAt: null };
+      if ("congregationId" in scope && scope.congregationId) {
+        where.OR = [{ congregationId: scope.congregationId }, { congregationId: null }];
+      }
       try {
-        const result = await model.updateMany({
-          where: { id: req.params.id, tenantId, deletedAt: null },
-          data: cleanData,
-        });
+        const result = await model.updateMany({ where, data: cleanData });
         if (result.count === 0) {
           res.status(404).json({ success: false, error: "Item não encontrado" });
           return;
@@ -139,10 +156,7 @@ export function createCrudRouter(
           const bad = m[1];
           const { [bad]: _drop, ...retry } = cleanData;
           try {
-            const result = await model.updateMany({
-              where: { id: req.params.id, tenantId, deletedAt: null },
-              data: retry,
-            });
+            const result = await model.updateMany({ where, data: retry });
             if (result.count === 0) {
               res.status(404).json({ success: false, error: "Item não encontrado" });
               return;
@@ -161,10 +175,14 @@ export function createCrudRouter(
   router.delete(
     "/:id",
     asyncHandler(async (req: AuthRequest, res: Response) => {
-      const tenantId = req.tenantId!;
+      const scope = getScopeFilter(req);
       const model = (prisma as any)[modelName];
+      const where: any = { id: req.params.id, tenantId: scope.tenantId, deletedAt: null };
+      if ("congregationId" in scope && scope.congregationId) {
+        where.OR = [{ congregationId: scope.congregationId }, { congregationId: null }];
+      }
       const result = await model.updateMany({
-        where: { id: req.params.id, tenantId, deletedAt: null },
+        where,
         data: { deletedAt: new Date() },
       });
       if (result.count === 0) {

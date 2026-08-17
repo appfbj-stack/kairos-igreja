@@ -53,26 +53,29 @@ enum Role {
 }
 
 model User {
-  id           String    @id @default(uuid())
-  tenantId     String
-  name         String
-  email        String    @unique
-  passwordHash String
-  role         Role      @default(USUARIO)
-  active       Boolean   @default(true)
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id              String    @id @default(uuid())
+  tenantId        String
+  congregationId  String?   // null = admin/super_admin que ve tudo
+  name            String
+  email           String    @unique
+  passwordHash    String
+  role            Role      @default(USUARIO)
+  active          Boolean   @default(true)
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id])
-  sessions Session[]
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  congregation  Congregation? @relation("UserCongregation", fields: [congregationId], references: [id])
+  sessions      Session[]
 
   conversationsA ChatConversation[] @relation("ParticipantA")
   conversationsB ChatConversation[] @relation("ParticipantB")
   chatMessages   ChatMessage[]
 
   @@index([tenantId])
+  @@index([congregationId])
   @@index([email])
 }
 
@@ -107,6 +110,7 @@ model Congregation {
   tenant  Tenant   @relation(fields: [tenantId], references: [id])
   members Member[]
   celulas Celula[]
+  users   User[]   @relation("UserCongregation")
 
   @@index([tenantId])
   @@index([active])

@@ -8,7 +8,7 @@ export class AuthService {
   static async login(email: string, password: string) {
     const user = await prisma.user.findFirst({
       where: { email, deletedAt: null, active: true },
-      include: { tenant: true },
+      include: { tenant: true, congregation: true },
     });
 
     if (!user) throw new Error("Email ou senha inválidos");
@@ -19,6 +19,7 @@ export class AuthService {
     const payload: AuthPayload = {
       userId: user.id,
       tenantId: user.tenantId,
+      congregationId: user.congregationId ?? null,
       role: user.role as AuthPayload["role"],
       email: user.email,
       name: user.name,
@@ -48,6 +49,8 @@ export class AuthService {
         name: user.name,
         email: user.email,
         role: user.role,
+        congregationId: user.congregationId ?? null,
+        congregationName: user.congregation?.name ?? null,
         tenant: { id: user.tenant.id, name: user.tenant.name, slug: user.tenant.slug },
       },
     };

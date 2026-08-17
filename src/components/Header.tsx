@@ -26,6 +26,23 @@ interface HeaderProps {
   currentUser?: { name: string; email: string; role: string };
 }
 
+function roleLabel(role: string | undefined): string {
+  const map: Record<string, string> = {
+    SUPER_ADMIN: "Super Admin",
+    ADMIN: "Administrador",
+    GERENTE: "Gerente / Pastor",
+    OPERADOR: "Operador",
+    USUARIO: "Membro",
+  };
+  return map[role || "USUARIO"] || role || "Membro";
+}
+
+function roleColor(role: string | undefined): string {
+  if (role === "SUPER_ADMIN" || role === "ADMIN") return "bg-[#a68a64]/20 text-[#2a2a20]";
+  if (role === "GERENTE") return "bg-indigo-100 text-indigo-700";
+  return "bg-[#5a5a40]/15 text-[#5a5a40]";
+}
+
 export const Header: React.FC<HeaderProps> = ({
   onOpenMobileMenu,
   congregations,
@@ -202,6 +219,12 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-[#f5f5f0] transition-colors"
             >
+              <span
+                title={roleLabel(currentUser.role)}
+                className={`hidden md:inline px-2 py-0.5 text-[10px] font-bold rounded-md ${roleColor(currentUser.role)}`}
+              >
+                {roleLabel(currentUser.role)}
+              </span>
               <div className="w-7 h-7 rounded-full bg-[#5a5a40] flex items-center justify-center">
                 <UserCircle className="w-5 h-5 text-amber-300" />
               </div>
@@ -210,10 +233,25 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </button>
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-[#e0e0d0] py-2 z-50 text-xs">
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-[#e0e0d0] py-2 z-50 text-xs">
                 <div className="px-3 py-2 border-b border-[#e0e0d0]">
                   <p className="font-bold text-[#2a2a20]">{currentUser.name}</p>
                   <p className="text-[10px] text-[#8a8a70] truncate">{currentUser.email}</p>
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${roleColor(currentUser.role)}`}>
+                      {roleLabel(currentUser.role)}
+                    </span>
+                    {user?.congregationName && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-[#5a5a40]/10 text-[#5a5a40]">
+                        {user.congregationName}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-[#8a8a70] mt-2">Escopo de acesso: {
+                    currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN"
+                      ? "Todas as 14 igrejas"
+                      : (user?.congregationName || "—")
+                  }</p>
                 </div>
                 <button
                   onClick={() => { logout(); setShowUserMenu(false); }}

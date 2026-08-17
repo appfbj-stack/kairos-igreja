@@ -6,6 +6,7 @@ import { Request } from "express";
 export interface AuthPayload {
   userId: string;
   tenantId: string;
+  congregationId: string | null;  // null = admin/super_admin (ve tudo)
   role: "SUPER_ADMIN" | "ADMIN" | "GERENTE" | "OPERADOR" | "USUARIO";
   email: string;
   name: string;
