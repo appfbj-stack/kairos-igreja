@@ -59,7 +59,9 @@ router.get(
 
 // ============================================================
 // GET /api/chat/users
-// Lista usuários disponíveis para conversar (mesmo tenant, exceto eu)
+// Lista usuários disponíveis para conversar (mesmo tenant, exceto eu).
+// Filtra só liderança (GERENTE/ADMIN/SUPER_ADMIN) — "rede pastoral".
+// Retorna também congregação pra UI mostrar quem é de onde.
 // ============================================================
 router.get(
   "/users",
@@ -74,12 +76,29 @@ router.get(
         id: { not: meId },
         deletedAt: null,
         active: true,
+        role: { in: ["GERENTE", "ADMIN", "SUPER_ADMIN"] },
       },
-      select: { id: true, name: true, email: true, role: true },
-      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        congregationId: true,
+        congregation: { select: { name: true } },
+      },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
     });
 
-    res.json({ success: true, data: users });
+    const data = users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      congregationId: u.congregationId,
+      congregationName: u.congregation?.name ?? null,
+    }));
+
+    res.json({ success: true, data });
   })
 );
 

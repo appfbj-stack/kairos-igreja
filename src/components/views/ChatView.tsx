@@ -17,6 +17,8 @@ interface User {
   name: string;
   email: string;
   role: string;
+  congregationId: string | null;
+  congregationName: string | null;
 }
 
 interface Message {
@@ -207,9 +209,11 @@ export const ChatView: React.FC = () => {
                   <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
                     <UserCircle className="w-6 h-6 text-indigo-600" />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="font-bold text-xs text-slate-900 truncate">{u.name}</p>
-                    <p className="text-[10px] text-slate-500">{roleLabel(u.role)}</p>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      {roleLabel(u.role)}{u.congregationName ? ` • ${u.congregationName}` : ''}
+                    </p>
                   </div>
                 </button>
               ))}
