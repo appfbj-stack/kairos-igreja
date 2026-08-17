@@ -10,7 +10,22 @@ export type ViewMode =
   | 'sermoes'
   | 'voluntarios'
   | 'mural'
-  | 'chat';
+  | 'chat'
+  | 'usuarios';
+
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'GERENTE' | 'OPERADOR' | 'USUARIO';
+
+export interface SystemUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  congregationId: string | null;
+  congregationName: string | null;
+  active: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
 
 export type MemberStatus = 'membro' | 'visitante' | 'lider' | 'discipulado' | 'inativo';
 

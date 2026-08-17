@@ -23,6 +23,7 @@ import { SermoesView } from './components/views/SermoesView';
 import { VoluntariosView } from './components/views/VoluntariosView';
 import { MuralView } from './components/views/MuralView';
 import { ChatView } from './components/views/ChatView';
+import { UsuariosView } from './components/views/UsuariosView';
 
 import { MemberModal } from './components/MemberModal';
 
@@ -42,6 +43,7 @@ import {
   Sermon,
   VolunteerRoster,
   MuralNotice,
+  SystemUser,
 } from './types';
 
 export default function App() {
@@ -83,6 +85,7 @@ function AppInner() {
   const [sermons, setSermons] = useState<Sermon[]>([]);
   const [rosters, setRosters] = useState<VolunteerRoster[]>([]);
   const [murals, setMurals] = useState<MuralNotice[]>([]);
+  const [users, setUsers] = useState<SystemUser[]>([]);
 
   /**
    * Carrega tudo em paralelo. Se QUALQUER falhar (ex.: token expirou), aborta.
@@ -103,6 +106,7 @@ function AppInner() {
         sermonsRes,
         rostersRes,
         muralsRes,
+        usersRes,
       ] = await Promise.all([
         dataService.list<any>('congregations', { limit: 200 }),
         dataService.list<any>('celulas', { limit: 200 }),
@@ -115,6 +119,7 @@ function AppInner() {
         dataService.list<any>('sermons', { limit: 200 }),
         dataService.list<any>('volunteers', { limit: 200 }),
         dataService.list<any>('murals', { limit: 200 }),
+        dataService.list<any>('users', { limit: 200 }).catch(() => ({ data: [] as any[] })), // silencioso: só ADMIN recebe
       ]);
 
       // Hidrata campos ricos do frontend a partir do JSON
@@ -274,6 +279,17 @@ function AppInner() {
       setSermons(sermonsRes.data.map(toSermon));
       setRosters(rostersRes.data.map(toRoster));
       setMurals(muralsRes.data.map(toMural));
+      setUsers((usersRes.data || []).map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        congregationId: u.congregationId ?? null,
+        congregationName: u.congregationName ?? null,
+        active: u.active,
+        lastLoginAt: u.lastLoginAt ?? null,
+        createdAt: u.createdAt,
+      })));
     } catch (e: any) {
       console.error('Falha ao carregar dados:', e);
       setDataError(e.message || 'Erro ao carregar dados');
@@ -684,6 +700,7 @@ function AppInner() {
         onCloseMobile={() => setIsMobileMenuOpen(false)}
         unreadChatCount={3}
         prayersCount={prayers.filter((p) => p.status === 'em_oracao').length}
+        isAdmin={user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'}
       />
 
       <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
@@ -821,6 +838,15 @@ function AppInner() {
           )}
 
           {currentView === 'chat' && <ChatView />}
+
+          {currentView === 'usuarios' && (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
+            <UsuariosView
+              users={users}
+              congregations={congregations}
+              currentUserId={user.id}
+              onReload={loadAll}
+            />
+          )}
         </main>
       </div>
 

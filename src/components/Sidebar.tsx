@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Church,
   X,
+  UserCog,
 } from 'lucide-react';
 import { ViewMode } from '../types';
 
@@ -24,6 +25,8 @@ interface SidebarProps {
   onCloseMobile: () => void;
   unreadChatCount?: number;
   prayersCount?: number;
+  /** Se true, mostra a entrada "Usuários" (só ADMIN/SUPER_ADMIN). */
+  isAdmin?: boolean;
 }
 
 interface NavItem {
@@ -31,6 +34,7 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   badge?: number;
+  adminOnly?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -40,8 +44,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
   unreadChatCount = 3,
   prayersCount = 2,
+  isAdmin = false,
 }) => {
-  const navItems: NavItem[] = [
+  const allItems: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'membros', label: 'Membros', icon: Users },
     { id: 'celulas', label: 'Células', icon: Home },
@@ -54,7 +59,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'voluntarios', label: 'Voluntários', icon: UserCheck },
     { id: 'mural', label: 'Mural', icon: Megaphone },
     { id: 'chat', label: 'Chat', icon: MessageSquare, badge: unreadChatCount },
+    { id: 'usuarios', label: 'Usuários', icon: UserCog, adminOnly: true },
   ];
+
+  // Filtra: esconde itens adminOnly se o user não for admin
+  const navItems = allItems.filter((i) => !i.adminOnly || isAdmin);
 
   return (
     <>

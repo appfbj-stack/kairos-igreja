@@ -6,6 +6,7 @@ import { env } from "./config/env";
 import { authRoutes } from "./modules/auth/auth.routes";
 import { memberRoutes } from "./modules/members/member.routes";
 import { chatRoutes } from "./modules/chat/chat.routes";
+import { userRoutes } from "./modules/users/users.routes";
 import { createCrudRouter } from "./modules/_crud";
 
 async function startServer() {
@@ -22,6 +23,7 @@ async function startServer() {
   app.use("/api/auth", authRoutes);
   app.use("/api/members", memberRoutes);
   app.use("/api/chat", chatRoutes);
+  app.use("/api/users", userRoutes);
 
   // Rotas CRUD genéricas (multi-tenant, soft-delete, busca, paginação)
   app.use("/api/celulas", createCrudRouter("celula", ["name", "leaderName"]));
