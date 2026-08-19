@@ -596,6 +596,65 @@ function AppInner() {
   };
 
   // ======================================================
+  // Handlers — Mural
+  // ======================================================
+  const handleAddMural = async (newMural: Partial<MuralNotice>) => {
+    const payload = {
+      title: newMural.title,
+      content: newMural.content,
+      category: newMural.category,
+      priority: newMural.priority,
+      expiresAt: newMural.expiresAt,
+      authorName: newMural.authorName,
+      authorRole: newMural.authorRole,
+      isPinned: newMural.isPinned,
+    };
+    const created = await dataService.create<any>('murals', payload);
+    const item: MuralNotice = {
+      id: created.id,
+      title: newMural.title || '',
+      content: newMural.content || '',
+      authorName: newMural.authorName || 'Liderança',
+      authorRole: newMural.authorRole || 'Pastor',
+      date: new Date().toISOString().split('T')[0],
+      isPinned: newMural.isPinned || false,
+      category: (newMural.category as any) || 'Aviso Geral',
+      likesCount: 0,
+      commentsCount: 0,
+    };
+    setMurals([item, ...murals]);
+  };
+
+  // ======================================================
+  // Handlers — Voluntários (Escala)
+  // ======================================================
+  const handleAddRoster = async (newRoster: Partial<VolunteerRoster>) => {
+    const payload = {
+      name: newRoster.volunteerName || newRoster.name,
+      ministry: newRoster.ministryName || newRoster.ministry,
+      role: newRoster.role,
+      date: newRoster.date,
+      serviceName: newRoster.serviceName,
+      status: newRoster.status || 'pendente',
+      notes: newRoster.notes,
+      congregationId: congregations[0]?.id,
+    };
+    const created = await dataService.create<any>('volunteers', payload);
+    const item: VolunteerRoster = {
+      id: created.id,
+      date: newRoster.date || new Date().toISOString().split('T')[0],
+      serviceName: newRoster.serviceName || '',
+      ministryId: '',
+      ministryName: newRoster.ministryName || newRoster.ministry || '',
+      volunteerName: newRoster.volunteerName || newRoster.name || '',
+      role: newRoster.role || '',
+      status: (newRoster.status as any) || 'pendente',
+      notes: newRoster.notes,
+    };
+    setRosters([item, ...rosters]);
+  };
+
+  // ======================================================
   // Handlers — Eventos
   // ======================================================
   const handleRegisterEvent = async (eventId: string) => {
@@ -824,7 +883,7 @@ function AppInner() {
           {currentView === 'voluntarios' && (
             <VoluntariosView
               rosters={rosters}
-              onAddRoster={() => openQuickAction('membro')}
+              onAddRoster={() => openQuickAction('voluntario')}
               onUpdateStatus={handleUpdateRosterStatus}
             />
           )}
@@ -832,7 +891,7 @@ function AppInner() {
           {currentView === 'mural' && (
             <MuralView
               murals={murals}
-              onAddMural={() => openQuickAction('membro')}
+              onAddMural={() => openQuickAction('mural')}
               onLikeMural={handleLikeMural}
             />
           )}
@@ -859,6 +918,8 @@ function AppInner() {
         onSaveCelula={handleAddCelula}
         onSaveFinance={handleAddFinance}
         onSavePrayer={handleAddPrayer}
+        onSaveMural={handleAddMural}
+        onSaveVolunteer={handleAddRoster}
       />
 
       <MemberModal

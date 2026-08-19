@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, UserPlus, Home, DollarSign, Flame, Calendar, BookOpen } from 'lucide-react';
+import { X, UserPlus, Home, DollarSign, Flame, Calendar, BookOpen, Megaphone, UserCheck } from 'lucide-react';
 import { MemberStatus, Congregation } from '../types';
 
 interface QuickActionModalProps {
@@ -11,6 +11,8 @@ interface QuickActionModalProps {
   onSaveCelula: (data: any) => void;
   onSaveFinance: (data: any) => void;
   onSavePrayer: (data: any) => void;
+  onSaveMural: (data: any) => void;
+  onSaveVolunteer: (data: any) => void;
 }
 
 export const QuickActionModal: React.FC<QuickActionModalProps> = ({
@@ -22,6 +24,8 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
   onSaveCelula,
   onSaveFinance,
   onSavePrayer,
+  onSaveMural,
+  onSaveVolunteer,
 }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
 
@@ -58,6 +62,21 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
   const [prayerAuthor, setPrayerAuthor] = useState('');
   const [prayerCategory, setPrayerCategory] = useState<'Saúde' | 'Família' | 'Finanças' | 'Espiritual' | 'Trabalho' | 'Outro'>('Saúde');
   const [prayerDescription, setPrayerDescription] = useState('');
+
+  // 5. Mural
+  const [muralTitle, setMuralTitle] = useState('');
+  const [muralContent, setMuralContent] = useState('');
+  const [muralCategory, setMuralCategory] = useState<'Pastoral' | 'Aviso Geral' | 'Jovens' | 'Urgente' | 'Eventos'>('Aviso Geral');
+  const [muralPriority, setMuralPriority] = useState<'normal' | 'alta' | 'urgente'>('normal');
+  const [muralExpiresAt, setMuralExpiresAt] = useState('');
+
+  // 6. Voluntário
+  const [volName, setVolName] = useState('');
+  const [volMinistry, setVolMinistry] = useState('');
+  const [volRole, setVolRole] = useState('');
+  const [volDate, setVolDate] = useState(new Date().toISOString().split('T')[0]);
+  const [volServiceName, setVolServiceName] = useState('');
+  const [volNotes, setVolNotes] = useState('');
 
   if (!isOpen) return null;
 
@@ -126,6 +145,36 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
     onClose();
   };
 
+  const handleSubmitMural = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSaveMural({
+      title: muralTitle,
+      content: muralContent,
+      category: muralCategory,
+      priority: muralPriority,
+      expiresAt: muralExpiresAt ? new Date(muralExpiresAt) : null,
+      authorName: 'Liderança',
+      authorRole: 'Pastor',
+      isPinned: muralPriority === 'urgente',
+    });
+    onClose();
+  };
+
+  const handleSubmitVolunteer = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSaveVolunteer({
+      name: volName,
+      ministry: volMinistry,
+      role: volRole,
+      date: volDate,
+      serviceName: volServiceName,
+      status: 'pendente',
+      notes: volNotes,
+      congregationId: congregations[0]?.id,
+    });
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 z-50 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in duration-150">
@@ -137,12 +186,14 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
         </div>
 
         {/* Tab Selection */}
-        <div className="grid grid-cols-4 gap-1.5 my-4 bg-slate-100 p-1 rounded-2xl text-xs font-semibold">
+        <div className="grid grid-cols-3 lg:grid-cols-6 gap-1.5 my-4 bg-slate-100 p-1 rounded-2xl text-xs font-semibold">
           {[
             { id: 'membro', label: 'Membro', icon: UserPlus },
             { id: 'celula', label: 'Célula', icon: Home },
             { id: 'financas', label: 'Finanças', icon: DollarSign },
             { id: 'oracao', label: 'Oração', icon: Flame },
+            { id: 'mural', label: 'Mural', icon: Megaphone },
+            { id: 'voluntario', label: 'Voluntário', icon: UserCheck },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -480,6 +531,182 @@ export const QuickActionModal: React.FC<QuickActionModalProps> = ({
               className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-md shadow-amber-200 transition-all mt-2"
             >
               Publicar no Mural de Oração
+            </button>
+          </form>
+        )}
+
+        {activeTab === 'mural' && (
+          <form onSubmit={handleSubmitMural} className="space-y-3.5">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                Título do Aviso *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: Culto de Santa Ceia neste domingo"
+                value={muralTitle}
+                onChange={(e) => setMuralTitle(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Categoria
+                </label>
+                <select
+                  value={muralCategory}
+                  onChange={(e) => setMuralCategory(e.target.value as any)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 font-medium"
+                >
+                  <option value="Aviso Geral">Aviso Geral</option>
+                  <option value="Pastoral">Pastoral</option>
+                  <option value="Jovens">Jovens</option>
+                  <option value="Urgente">Urgente</option>
+                  <option value="Eventos">Eventos</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Prioridade
+                </label>
+                <select
+                  value={muralPriority}
+                  onChange={(e) => setMuralPriority(e.target.value as any)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 font-medium"
+                >
+                  <option value="normal">Normal</option>
+                  <option value="alta">Alta</option>
+                  <option value="urgente">Urgente (fixado)</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                Conteúdo *
+              </label>
+              <textarea
+                rows={3}
+                required
+                placeholder="Escreva o aviso completo..."
+                value={muralContent}
+                onChange={(e) => setMuralContent(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                Expira em (opcional)
+              </label>
+              <input
+                type="date"
+                value={muralExpiresAt}
+                onChange={(e) => setMuralExpiresAt(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs shadow-md shadow-rose-200 transition-all mt-2"
+            >
+              Publicar no Mural
+            </button>
+          </form>
+        )}
+
+        {activeTab === 'voluntario' && (
+          <form onSubmit={handleSubmitVolunteer} className="space-y-3.5">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                Nome do Voluntário *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: João da Silva"
+                value={volName}
+                onChange={(e) => setVolName(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Ministério
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Louvor, Mídia, Recepção..."
+                  value={volMinistry}
+                  onChange={(e) => setVolMinistry(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Função
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Vocalista, Câmera 1..."
+                  value={volRole}
+                  onChange={(e) => setVolRole(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Data do Culto
+                </label>
+                <input
+                  type="date"
+                  value={volDate}
+                  onChange={(e) => setVolDate(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Nome do Culto
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Culto Domingo 18h"
+                  value={volServiceName}
+                  onChange={(e) => setVolServiceName(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                Observações
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Ex: Troca com Maria no som..."
+                value={volNotes}
+                onChange={(e) => setVolNotes(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs shadow-md shadow-cyan-200 transition-all mt-2"
+            >
+              Adicionar à Escala
             </button>
           </form>
         )}
