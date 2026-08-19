@@ -39,6 +39,7 @@ model Tenant {
   assets        Asset[]
   backups       Backup[]
   conversations ChatConversation[]
+  documents     Document[]
 }
 
 // ============================================================
@@ -73,6 +74,7 @@ model User {
   conversationsA ChatConversation[] @relation("ParticipantA")
   conversationsB ChatConversation[] @relation("ParticipantB")
   chatMessages   ChatMessage[]
+  documentsUploaded Document[]
 
   @@index([tenantId])
   @@index([congregationId])
@@ -150,6 +152,7 @@ model Member {
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
   congregation Congregation? @relation(fields: [congregationId], references: [id])
+  documents    Document[]
 
   @@index([tenantId])
   @@index([congregationId])
@@ -401,6 +404,44 @@ model Asset {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
+}
+
+// ============================================================
+// DOCUMENTOS (certidões, crachás, manuais, etc)
+// ============================================================
+enum DocumentType {
+  BATISMO
+  OBREIRO
+  CRACHA
+  EQUIPAMENTO
+  OUTRO
+}
+
+model Document {
+  id           String       @id @default(uuid())
+  tenantId     String
+  memberId     String?      // null = documento solto (ex: manual de impressora)
+  uploadedById String       // quem fez upload
+  title        String
+  description  String?
+  type         DocumentType @default(OUTRO)
+  url          String       // caminho /uploads/<tenantId>/<arquivo>
+  fileName     String       // nome original
+  fileSize     Int          // bytes
+  mimeType     String
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  member      Member?  @relation(fields: [memberId], references: [id])
+  uploadedBy  User     @relation(fields: [uploadedById], references: [id])
+
+  @@index([tenantId])
+  @@index([memberId])
+  @@index([type])
+  @@index([createdAt])
 }
 
 // ============================================================

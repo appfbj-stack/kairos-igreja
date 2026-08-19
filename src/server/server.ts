@@ -2,11 +2,13 @@ import express from "express";
 import path from "path";
 import cors from "cors";
 import { createServer as createViteServer } from "vite";
+import fs from "fs";
 import { env } from "./config/env";
 import { authRoutes } from "./modules/auth/auth.routes";
 import { memberRoutes } from "./modules/members/member.routes";
 import { chatRoutes } from "./modules/chat/chat.routes";
 import { userRoutes } from "./modules/users/users.routes";
+import { documentRoutes } from "./modules/documents/documents.routes";
 import { createCrudRouter } from "./modules/_crud";
 
 async function startServer() {
@@ -24,6 +26,21 @@ async function startServer() {
   app.use("/api/members", memberRoutes);
   app.use("/api/chat", chatRoutes);
   app.use("/api/users", userRoutes);
+  app.use("/api/documents", documentRoutes);
+
+  // ==========================================
+  // Uploads — serve arquivos estáticos de /uploads
+  // ==========================================
+  const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  app.use("/uploads", express.static(uploadDir, {
+    maxAge: "7d",
+    setHeaders: (res) => {
+      res.setHeader("Content-Disposition", "inline");
+    },
+  }));
 
   // Rotas CRUD genéricas (multi-tenant, soft-delete, busca, paginação)
   app.use("/api/celulas", createCrudRouter("celula", ["name", "leaderName"]));

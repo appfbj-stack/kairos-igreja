@@ -24,6 +24,7 @@ import { VoluntariosView } from './components/views/VoluntariosView';
 import { MuralView } from './components/views/MuralView';
 import { ChatView } from './components/views/ChatView';
 import { UsuariosView } from './components/views/UsuariosView';
+import { DocumentosView } from './components/views/DocumentosView';
 
 import { MemberModal } from './components/MemberModal';
 
@@ -44,6 +45,7 @@ import {
   VolunteerRoster,
   MuralNotice,
   SystemUser,
+  KairosDocument,
 } from './types';
 
 export default function App() {
@@ -86,6 +88,7 @@ function AppInner() {
   const [rosters, setRosters] = useState<VolunteerRoster[]>([]);
   const [murals, setMurals] = useState<MuralNotice[]>([]);
   const [users, setUsers] = useState<SystemUser[]>([]);
+  const [documents, setDocuments] = useState<KairosDocument[]>([]);
 
   /**
    * Carrega tudo em paralelo. Se QUALQUER falhar (ex.: token expirou), aborta.
@@ -107,6 +110,7 @@ function AppInner() {
         rostersRes,
         muralsRes,
         usersRes,
+        documentsRes,
       ] = await Promise.all([
         dataService.list<any>('congregations', { limit: 200 }),
         dataService.list<any>('celulas', { limit: 200 }),
@@ -120,6 +124,7 @@ function AppInner() {
         dataService.list<any>('volunteers', { limit: 200 }),
         dataService.list<any>('murals', { limit: 200 }),
         dataService.list<any>('users', { limit: 200 }).catch(() => ({ data: [] as any[] })), // silencioso: só ADMIN recebe
+        dataService.list<any>('documents', { limit: 200 }).catch(() => ({ data: [] as any[] })),
       ]);
 
       // Hidrata campos ricos do frontend a partir do JSON
@@ -289,6 +294,22 @@ function AppInner() {
         active: u.active,
         lastLoginAt: u.lastLoginAt ?? null,
         createdAt: u.createdAt,
+      })));
+      setDocuments((documentsRes.data || []).map((d: any) => ({
+        id: d.id,
+        title: d.title,
+        description: d.description ?? null,
+        type: d.type,
+        url: d.url,
+        fileName: d.fileName,
+        fileSize: d.fileSize,
+        mimeType: d.mimeType,
+        active: d.active,
+        memberId: d.memberId ?? null,
+        memberName: d.memberName ?? null,
+        uploadedById: d.uploadedById,
+        uploadedByName: d.uploadedByName ?? null,
+        createdAt: d.createdAt,
       })));
     } catch (e: any) {
       console.error('Falha ao carregar dados:', e);
@@ -903,6 +924,14 @@ function AppInner() {
               users={users}
               congregations={congregations}
               currentUserId={user.id}
+              onReload={loadAll}
+            />
+          )}
+
+          {currentView === 'documentos' && (
+            <DocumentosView
+              documents={documents}
+              members={members}
               onReload={loadAll}
             />
           )}

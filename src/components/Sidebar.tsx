@@ -15,6 +15,7 @@ import {
   Church,
   X,
   UserCog,
+  FileText,
 } from 'lucide-react';
 import { ViewMode } from '../types';
 
@@ -59,6 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'voluntarios', label: 'Voluntários', icon: UserCheck },
     { id: 'mural', label: 'Mural', icon: Megaphone },
     { id: 'chat', label: 'Chat', icon: MessageSquare, badge: unreadChatCount },
+    { id: 'documentos', label: 'Documentos', icon: FileText },
     { id: 'usuarios', label: 'Usuários', icon: UserCog, adminOnly: true },
   ];
 

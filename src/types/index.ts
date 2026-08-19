@@ -11,7 +11,27 @@ export type ViewMode =
   | 'voluntarios'
   | 'mural'
   | 'chat'
-  | 'usuarios';
+  | 'usuarios'
+  | 'documentos';
+
+export type DocumentType = 'BATISMO' | 'OBREIRO' | 'CRACHA' | 'EQUIPAMENTO' | 'OUTRO';
+
+export interface KairosDocument {
+  id: string;
+  title: string;
+  description?: string;
+  type: DocumentType;
+  url: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  active: boolean;
+  memberId: string | null;
+  memberName: string | null;
+  uploadedById: string;
+  uploadedByName: string | null;
+  createdAt: string;
+}
 
 export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'GERENTE' | 'OPERADOR' | 'USUARIO';
 
