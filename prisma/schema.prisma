@@ -262,7 +262,9 @@ model PrayerRequest {
   id        String   @id @default(uuid())
   tenantId  String
   name      String
+  title     String?  // titulo opcional (ex: "Saude da mae")
   request   String
+  category  String?  // saude, familia, financas, espiritual, trabalho, outro
   answered  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -272,6 +274,7 @@ model PrayerRequest {
 
   @@index([tenantId])
   @@index([createdAt])
+  @@index([category])
 }
 
 // ============================================================
@@ -322,20 +325,26 @@ model VolunteerRoster {
 // MURAL DE AVISOS
 // ============================================================
 model MuralNotice {
-  id        String   @id @default(uuid())
-  tenantId  String
-  title     String
-  content   String
-  priority  String   @default("normal") // normal, alta, urgente
-  expiresAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deletedAt DateTime?
+  id         String   @id @default(uuid())
+  tenantId   String
+  title      String
+  content    String
+  category   String?  // pastoral, aviso, jovens, urgente, eventos
+  priority   String   @default("normal") // normal, alta, urgente
+  isPinned   Boolean  @default(false)
+  authorName String?
+  authorRole String?
+  expiresAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([createdAt])
+  @@index([category])
+  @@index([priority])
 }
 
 // ============================================================
