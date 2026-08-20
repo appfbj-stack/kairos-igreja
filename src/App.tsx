@@ -25,6 +25,7 @@ import { MuralView } from './components/views/MuralView';
 import { ChatView } from './components/views/ChatView';
 import { UsuariosView } from './components/views/UsuariosView';
 import { DocumentosView } from './components/views/DocumentosView';
+import { BillingView } from './components/views/BillingView';
 
 import { MemberModal } from './components/MemberModal';
 
@@ -326,6 +327,17 @@ function AppInner() {
   useEffect(() => {
     if (user) loadAll();
   }, [user, loadAll]);
+
+  // Escuta bloqueio por billing expirado
+  useEffect(() => {
+    function onBlocked(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      console.warn('[subscription] bloqueado:', detail);
+      setCurrentView('billing');
+    }
+    window.addEventListener('kairos:subscription-blocked', onBlocked);
+    return () => window.removeEventListener('kairos:subscription-blocked', onBlocked);
+  }, []);
 
   // ======================================================
   // Handlers — Congregações
@@ -934,6 +946,15 @@ function AppInner() {
               documents={documents}
               members={members}
               onReload={loadAll}
+            />
+          )}
+
+          {currentView === 'billing' && (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
+            <BillingView
+              onLogout={() => {
+                logout();
+                setCurrentView('dashboard');
+              }}
             />
           )}
         </main>

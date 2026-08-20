@@ -24,6 +24,14 @@ model Tenant {
   updatedAt DateTime @updatedAt
   deletedAt DateTime?
 
+  // ─── Billing (Asaas) ─────────────────────────────────
+  trialEndsAt          DateTime?  // 10 dias após createdAt por padrão
+  subscriptionStatus   String     @default("TRIAL")  // TRIAL | ACTIVE | OVERDUE | CANCELLED | EXPIRED
+  subscriptionEndsAt  DateTime?
+  asaasCustomerId      String?
+  asaasSubscriptionId  String?
+  planKey              String     @default("BASICO")  // BASICO | PRO
+
   users         User[]
   congregations Congregation[]
   members       Member[]
@@ -40,6 +48,7 @@ model Tenant {
   backups       Backup[]
   conversations ChatConversation[]
   documents     Document[]
+  payments      AsaasPayment[]
 }
 
 // ============================================================
@@ -479,4 +488,59 @@ model Backup {
 
   @@index([tenantId])
   @@index([createdAt])
+}
+
+// ============================================================
+// BILLING — Asaas (cobrança da PLATAFORMA ao tenant)
+// ============================================================
+enum AsaasPaymentType {
+  SUBSCRIPTION   // assinatura recorrente (cartão)
+  PIX            // pagamento avulso (pix)
+  UNKNOWN
+}
+
+enum AsaasPaymentStatus {
+  PENDING
+  RECEIVED
+  OVERDUE
+  REFUNDED
+  CANCELLED
+  UNKNOWN
+}
+
+model AsaasPayment {
+  id              String   @id @default(uuid())
+  tenantId        String
+  type            AsaasPaymentType
+  status          AsaasPaymentStatus  @default(PENDING)
+  // IDs externos do Asaas
+  asaasCustomerId String?
+  asaasPaymentId  String?  // ID da cobrança avulsa (Pix) ou da parcela da assinatura
+  asaasSubscriptionId String?
+  // Valores
+  value           Float
+  netValue        Float?
+  description     String
+  cycle           String?  // MONTHLY, YEARLY (apenas subscription)
+  dueDate         DateTime
+  paidAt          DateTime?
+  // PIX específico
+  pixQrCodeId     String?
+  pixQrCode       String?  // Base64 da imagem
+  pixCopyPaste    String?  // Linha copia-e-cola
+  pixExpiresAt    DateTime?
+  // URL de checkout (cartão)
+  invoiceUrl      String?  // URL para o cliente pagar a fatura
+  // Controle
+  raw             Json?    // payload completo do Asaas pra auditoria
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([asaasSubscriptionId])
+  @@index([asaasPaymentId])
 }

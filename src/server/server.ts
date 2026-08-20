@@ -10,6 +10,11 @@ import { chatRoutes } from "./modules/chat/chat.routes";
 import { userRoutes } from "./modules/users/users.routes";
 import { documentRoutes } from "./modules/documents/documents.routes";
 import { createCrudRouter } from "./modules/_crud";
+import billingRoutes from "./modules/asaas/billing.routes";
+import asaasWebhookRouter from "./modules/asaas/asaas.webhook";
+import { authMiddleware } from "./middleware/auth";
+import { requireActiveSubscription } from "./middleware/subscription";
+import { asaasConfigured, ASAAS_ENV_LABEL } from "./modules/asaas/asaas.service";
 
 async function startServer() {
   const app = express();
@@ -20,9 +25,26 @@ async function startServer() {
   app.use(express.json({ limit: "10mb" }));
 
   // ==========================================
-  // API Routes
+  // Webhook Asaas — PÚBLICO (validado por token próprio)
+  // Tem que vir ANTES do auth + subscription
+  // ==========================================
+  app.use("/api/asaas", asaasWebhookRouter);
+
+  // ==========================================
+  // API Routes que não precisam de trial/assinatura
   // ==========================================
   app.use("/api/auth", authRoutes);
+  app.use("/api/billing", authMiddleware, billingRoutes);
+
+  // ==========================================
+  // Subscription guard — bloqueia trial expirado / cancelado
+  // (skip automático de /api/auth, /api/billing, /api/asaas/webhook, /api/health)
+  // ==========================================
+  app.use(requireActiveSubscription);
+
+  // ==========================================
+  // Rotas autenticadas
+  // ==========================================
   app.use("/api/members", memberRoutes);
   app.use("/api/chat", chatRoutes);
   app.use("/api/users", userRoutes);

@@ -12,7 +12,8 @@ export type ViewMode =
   | 'mural'
   | 'chat'
   | 'usuarios'
-  | 'documentos';
+  | 'documentos'
+  | 'billing';
 
 export type DocumentType = 'BATISMO' | 'OBREIRO' | 'CRACHA' | 'EQUIPAMENTO' | 'OUTRO';
 

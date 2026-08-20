@@ -16,6 +16,7 @@ import {
   X,
   UserCog,
   FileText,
+  CreditCard,
 } from 'lucide-react';
 import { ViewMode } from '../types';
 
@@ -62,6 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'chat', label: 'Chat', icon: MessageSquare, badge: unreadChatCount },
     { id: 'documentos', label: 'Documentos', icon: FileText },
     { id: 'usuarios', label: 'Usuários', icon: UserCog, adminOnly: true },
+    { id: 'billing', label: 'Assinatura', icon: CreditCard, adminOnly: true },
   ];
 
   // Filtra: esconde itens adminOnly se o user não for admin

@@ -51,7 +51,14 @@ export class AuthService {
         role: user.role,
         congregationId: user.congregationId ?? null,
         congregationName: user.congregation?.name ?? null,
-        tenant: { id: user.tenant.id, name: user.tenant.name, slug: user.tenant.slug },
+        tenant: {
+          id: user.tenant.id,
+          name: user.tenant.name,
+          slug: user.tenant.slug,
+          subscriptionStatus: user.tenant.subscriptionStatus,
+          trialEndsAt: user.tenant.trialEndsAt,
+          subscriptionEndsAt: user.tenant.subscriptionEndsAt,
+        },
       },
     };
   }
@@ -70,7 +77,13 @@ export class AuthService {
 
     const result = await prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
-        data: { name: data.tenantName, slug: data.tenantSlug },
+        data: {
+          name: data.tenantName,
+          slug: data.tenantSlug,
+          // Trial de 10 dias a partir de agora
+          trialEndsAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+          subscriptionStatus: "TRIAL",
+        },
       });
 
       const user = await tx.user.create({

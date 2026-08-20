@@ -2,6 +2,9 @@
 const TOKEN_KEY = "kairos_token";
 const USER_KEY = "kairos_user";
 
+// Evento customizado para sinalizar bloqueio por billing
+export const SUBSCRIPTION_BLOCKED_EVENT = "kairos:subscription-blocked";
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -38,6 +41,13 @@ export async function api<T = any>(
 
   const res = await fetch(`/api${path}`, { ...options, headers });
   const data = await res.json();
+  if (res.status === 402 && data.code === "SUBSCRIPTION_REQUIRED") {
+    // Billing bloqueado — dispara evento global
+    window.dispatchEvent(
+      new CustomEvent(SUBSCRIPTION_BLOCKED_EVENT, { detail: data })
+    );
+    throw new Error(data.error || "Assinatura inativa");
+  }
   if (!res.ok || !data.success) {
     throw new Error(data.error || `HTTP ${res.status}`);
   }
