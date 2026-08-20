@@ -50,6 +50,7 @@ COPY --from=builder /app/generated ./generated
 COPY --from=builder /app/index.html ./index.html
 COPY --from=builder /app/metadata.json ./metadata.json
 COPY --from=builder /app/assets ./assets
+COPY --from=builder /app/scripts ./scripts
 
 # Volume para backups locais do banco (opcional, mesmo com Postgres)
 RUN mkdir -p /app/backups
