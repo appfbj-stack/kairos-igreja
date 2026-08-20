@@ -873,6 +873,7 @@ function AppInner() {
               congregations={congregations}
               onAddEvent={() => openQuickAction('membro')}
               onRegisterEvent={handleRegisterEvent}
+              onReload={loadAll}
             />
           )}
 
