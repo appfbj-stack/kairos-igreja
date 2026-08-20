@@ -25,10 +25,8 @@ export const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-[#2a2a20] p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#5a5a40] mb-4">
-            <svg className="w-9 h-9 text-amber-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div className="inline-flex items-center justify-center w-24 h-24 mb-4">
+            <img src="/logo-kairos.png" alt="Kairos Tecnologia" className="w-full h-full object-contain drop-shadow-lg" />
           </div>
           <h1 className="text-2xl font-bold font-serif text-[#2a2a20]">Kairos Igreja</h1>
           <p className="text-xs text-[#8a8a70] mt-1">Plataforma de Gestão Eclesiástica</p>

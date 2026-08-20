@@ -64,7 +64,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-md border-b border-[#e0e0d0] px-4 lg:px-8 flex items-center justify-between gap-4">
-      {/* Left section: Hamburger & Congregation Dropdown */}
+      {/* Left section: Logo, Hamburger & Congregation Dropdown */}
       <div className="flex items-center gap-3">
         <button
           onClick={onOpenMobileMenu}
@@ -73,6 +73,14 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <Menu className="w-5 h-5" />
         </button>
+
+        {/* Logo Kairos Tecnologia */}
+        <img
+          src="/logo-kairos.png"
+          alt="Kairos Tecnologia"
+          className="hidden sm:block h-9 w-9 rounded-full object-cover"
+          title="Kairos Igreja — Gestão Eclesiástica"
+        />
 
         {/* Congregation Switcher */}
         <div className="relative">
