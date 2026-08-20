@@ -15,6 +15,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import {
   FileText, Upload, Search, Filter, Trash2, Download, ExternalLink,
   File, Image as ImageIcon, User, Calendar, X, AlertCircle, Sparkles,
+  Edit2,
 } from 'lucide-react';
 import { KairosDocument, DocumentType, Member } from '../../types';
 import { dataService } from '../../services/dataService';
@@ -87,6 +88,20 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
   // Confirm delete
   const [deleteConfirm, setDeleteConfirm] = useState<KairosDocument | null>(null);
 
+  // Edit modal
+  const [editingDoc, setEditingDoc] = useState<KairosDocument | null>(null);
+  const [editForm, setEditForm] = useState<{ title: string; description: string; type: DocumentType; memberId: string }>({
+    title: '', description: '', type: 'OUTRO', memberId: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Toast (feedback discreto)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    window.setTimeout(() => setToast(null), 2500);
+  };
+
   // ─────────────────────────────────────────────────────────
   // Filtros
   // ─────────────────────────────────────────────────────────
@@ -157,6 +172,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
 
       setIsUploadOpen(false);
       resetUpload();
+      showToast('Documento enviado', 'success');
       await onReload();
     } catch (e: any) {
       setUploadError(e.message || 'Erro ao enviar');
@@ -169,9 +185,47 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
     try {
       await dataService.remove('documents', d.id);
       setDeleteConfirm(null);
+      showToast('Documento removido', 'success');
       await onReload();
     } catch (e: any) {
-      alert(e.message || 'Erro ao deletar');
+      showToast(e.message || 'Erro ao deletar', 'error');
+    }
+  };
+
+  const openEdit = (d: KairosDocument) => {
+    setEditingDoc(d);
+    setEditForm({
+      title: d.title,
+      description: d.description || '',
+      type: d.type,
+      memberId: d.memberId || '',
+    });
+  };
+
+  const handleEditSave = async () => {
+    if (!editingDoc) return;
+    if (!editForm.title.trim()) {
+      showToast('Título é obrigatório', 'error');
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await dataService.request(`/documents/${editingDoc.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: editForm.title.trim(),
+          description: editForm.description.trim() || null,
+          type: editForm.type,
+          memberId: editForm.memberId || null,
+        }),
+      });
+      setEditingDoc(null);
+      showToast('Alterações salvas', 'success');
+      await onReload();
+    } catch (e: any) {
+      showToast(e.message || 'Erro ao salvar', 'error');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -282,6 +336,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
                 key={d.id}
                 doc={d}
                 onDelete={() => setDeleteConfirm(d)}
+                onEdit={() => openEdit(d)}
               />
             ))}
           </div>
@@ -345,6 +400,34 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Edit Document Modal */}
+      {editingDoc && (
+        <EditDocumentModal
+          doc={editingDoc}
+          form={editForm}
+          saving={savingEdit}
+          members={members}
+          hideMemberSelect={hideMemberSelect}
+          onClose={() => setEditingDoc(null)}
+          onChange={(patch) => setEditForm((f) => ({ ...f, ...patch }))}
+          onSave={handleEditSave}
+        />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-[60] transition-all">
+          <div className={`px-4 py-3 rounded-2xl shadow-xl text-sm font-bold flex items-center gap-2 ${
+            toast.type === 'success'
+              ? 'bg-emerald-500 text-white'
+              : 'bg-rose-500 text-white'
+          }`}>
+            <span>{toast.type === 'success' ? '✓' : '⚠'}</span>
+            {toast.msg}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -353,62 +436,66 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
 // Sub-componentes
 // ═══════════════════════════════════════════════════════════
 
-const DocumentCard: React.FC<{ doc: KairosDocument; onDelete: () => void }> = ({ doc, onDelete }) => {
+const DocumentCard: React.FC<{ doc: KairosDocument; onDelete: () => void; onEdit: () => void }> = ({ doc, onDelete, onEdit }) => {
   const Icon = TYPE_ICON[doc.type] || File;
   const isImg = isImage(doc.mimeType);
 
   return (
-    <div className="bg-white rounded-2xl border border-[#e8e4d8] shadow-sm overflow-hidden hover:shadow-md transition-shadow group">
-      {/* Preview */}
+    <div className="bg-white rounded-2xl border border-[#e8e4d8] shadow-sm hover:shadow-md transition-shadow group flex gap-3 p-3">
+      {/* Thumbnail compacto */}
       <a
         href={doc.url}
         target="_blank"
         rel="noreferrer"
-        className="block h-40 bg-gradient-to-br from-slate-100 to-slate-200 relative overflow-hidden"
+        className="shrink-0 w-16 h-16 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 relative overflow-hidden flex items-center justify-center"
+        title="Abrir arquivo"
       >
         {isImg ? (
           <img src={doc.url} alt={doc.title} className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-[#a68a64]">
-            <Icon className="w-12 h-12 mb-1" />
-            <span className="text-[10px] font-extrabold tracking-widest uppercase opacity-60">
-              {doc.mimeType.split('/')[1] || 'arquivo'}
-            </span>
-          </div>
+          <Icon className="w-7 h-7 text-[#a68a64]" />
         )}
-        <div className="absolute inset-0 bg-[#2a2a20]/0 group-hover:bg-[#2a2a20]/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-          <ExternalLink className="w-6 h-6 text-white" />
-        </div>
       </a>
 
-      <div className="p-4">
-        <span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-extrabold tracking-wider uppercase ${TYPE_COLOR[doc.type]}`}>
-          {TYPE_LABEL[doc.type]}
-        </span>
-        <h3 className="font-bold text-sm text-[#2a2a20] mt-2 truncate" title={doc.title}>{doc.title}</h3>
-        {doc.description && (
-          <p className="text-xs text-[#7a7060] mt-1 line-clamp-2">{doc.description}</p>
-        )}
-        <div className="mt-3 space-y-1 text-[10px] text-[#7a7060]">
-          <p className="truncate" title={doc.fileName}>📎 {doc.fileName}</p>
-          <p>{formatBytes(doc.fileSize)}</p>
-          {doc.memberName && (
-            <p className="flex items-center gap-1 truncate" title={doc.memberName}>
-              <User className="w-3 h-3" /> {doc.memberName}
-            </p>
-          )}
-          <p className="flex items-center gap-1">
-            <Calendar className="w-3 h-3" /> {new Date(doc.createdAt).toLocaleDateString('pt-BR')}
-            {doc.uploadedByName && <span> · {doc.uploadedByName}</span>}
-          </p>
+      {/* Info */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex items-start gap-2">
+          <span className={`shrink-0 px-2 py-0.5 rounded-full border text-[9px] font-extrabold tracking-wider uppercase ${TYPE_COLOR[doc.type]}`}>
+            {TYPE_LABEL[doc.type]}
+          </span>
+          <h3 className="font-bold text-sm text-[#2a2a20] truncate flex-1" title={doc.title}>{doc.title}</h3>
         </div>
 
-        <div className="mt-3 flex items-center gap-1">
+        {doc.description && (
+          <p className="text-[11px] text-[#7a7060] mt-1 truncate" title={doc.description}>{doc.description}</p>
+        )}
+
+        <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[#7a7060]">
+          <span className="truncate" title={doc.fileName}>📎 {doc.fileName}</span>
+          <span>·</span>
+          <span>{formatBytes(doc.fileSize)}</span>
+          {doc.memberName && (
+            <>
+              <span>·</span>
+              <span className="truncate flex items-center gap-0.5" title={doc.memberName}>
+                <User className="w-2.5 h-2.5" /> {doc.memberName}
+              </span>
+            </>
+          )}
+        </div>
+        <div className="text-[10px] text-[#7a7060] flex items-center gap-1 mt-0.5">
+          <Calendar className="w-2.5 h-2.5" /> {new Date(doc.createdAt).toLocaleDateString('pt-BR')}
+          {doc.uploadedByName && <span> · {doc.uploadedByName}</span>}
+        </div>
+
+        {/* Ações */}
+        <div className="mt-auto pt-2 flex items-center gap-1">
           <a
             href={doc.url}
             target="_blank"
             rel="noreferrer"
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#5a5a40] hover:bg-[#4d4d36] text-white text-xs font-bold"
+            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-[#5a5a40] hover:bg-[#4d4d36] text-white text-[11px] font-bold"
+            title="Abrir arquivo"
           >
             <ExternalLink className="w-3 h-3" />
             Abrir
@@ -416,17 +503,24 @@ const DocumentCard: React.FC<{ doc: KairosDocument; onDelete: () => void }> = ({
           <a
             href={doc.url}
             download={doc.fileName}
-            className="p-1.5 rounded-xl text-[#7a7060] hover:bg-[#f5f0e0] hover:text-[#5a5a40]"
+            className="p-1 rounded-lg text-[#7a7060] hover:bg-[#f5f0e0] hover:text-[#5a5a40]"
             title="Baixar"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-3 h-3" />
           </a>
           <button
-            onClick={onDelete}
-            className="p-1.5 rounded-xl text-rose-600 hover:bg-rose-50"
-            title="Remover"
+            onClick={onEdit}
+            className="p-1 rounded-lg text-[#a68a64] hover:bg-[#a68a64]/10 hover:text-[#5a5a40]"
+            title="Editar"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Edit2 className="w-3 h-3" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-1 rounded-lg text-rose-600 hover:bg-rose-50"
+            title="Excluir"
+          >
+            <Trash2 className="w-3 h-3" />
           </button>
         </div>
       </div>
@@ -605,6 +699,117 @@ const UploadModal: React.FC<{
             className="flex-1 px-4 py-2.5 rounded-2xl bg-[#5a5a40] hover:bg-[#4d4d36] text-white text-sm font-bold shadow-md disabled:opacity-50"
           >
             {uploading ? 'Enviando...' : 'Fazer Upload'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════
+// Edit Document Modal (metadados)
+// ═══════════════════════════════════════════════════════════
+const EditDocumentModal: React.FC<{
+  doc: KairosDocument;
+  form: { title: string; description: string; type: DocumentType; memberId: string };
+  saving: boolean;
+  members: Member[];
+  hideMemberSelect?: boolean;
+  onClose: () => void;
+  onChange: (patch: Partial<{ title: string; description: string; type: DocumentType; memberId: string }>) => void;
+  onSave: () => void;
+}> = ({ doc, form, saving, members, hideMemberSelect, onClose, onChange, onSave }) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2a2a20]/60 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="px-6 py-5 border-b border-[#e8e4d8] flex items-center justify-between">
+          <h2 className="text-lg font-serif font-bold text-[#2a2a20] flex items-center gap-2">
+            <Edit2 className="w-5 h-5 text-[#a68a64]" />
+            Editar documento
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#f5f0e0] text-[#7a7060]">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <p className="text-xs text-[#7a7060]">
+            <strong className="text-[#5a5a40]">Arquivo:</strong> {doc.fileName}
+            <span className="mx-1.5">·</span>
+            {formatBytes(doc.fileSize)}
+          </p>
+          <p className="text-[10px] text-[#a68a64] -mt-2">
+            Para trocar o arquivo, remova este e faça novo upload.
+          </p>
+
+          <div>
+            <label className="block text-xs font-extrabold tracking-widest text-[#7a7060] uppercase mb-1.5">Título *</label>
+            <input
+              type="text"
+              value={form.title}
+              onChange={(e) => onChange({ title: e.target.value })}
+              placeholder="Ex: Certidão de Batismo - João Silva"
+              className="w-full px-4 py-2.5 rounded-2xl border border-[#e8e4d8] text-sm focus:border-[#a68a64] focus:ring-2 focus:ring-[#a68a64]/20 outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-extrabold tracking-widest text-[#7a7060] uppercase mb-1.5">Tipo *</label>
+              <select
+                value={form.type}
+                onChange={(e) => onChange({ type: e.target.value as DocumentType })}
+                className="w-full px-4 py-2.5 rounded-2xl border border-[#e8e4d8] text-sm focus:border-[#a68a64] outline-none"
+              >
+                {Object.entries(TYPE_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+            {!hideMemberSelect && (
+              <div>
+                <label className="block text-xs font-extrabold tracking-widest text-[#7a7060] uppercase mb-1.5">Membro</label>
+                <select
+                  value={form.memberId}
+                  onChange={(e) => onChange({ memberId: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-2xl border border-[#e8e4d8] text-sm focus:border-[#a68a64] outline-none"
+                >
+                  <option value="">— Solto (sem membro) —</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-extrabold tracking-widest text-[#7a7060] uppercase mb-1.5">Descrição (opcional)</label>
+            <textarea
+              rows={3}
+              value={form.description}
+              onChange={(e) => onChange({ description: e.target.value })}
+              placeholder="Ex: Batismo realizado em 2020, Paróquia São Paulo"
+              className="w-full px-4 py-2.5 rounded-2xl border border-[#e8e4d8] text-sm focus:border-[#a68a64] focus:ring-2 focus:ring-[#a68a64]/20 outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-[#e8e4d8] flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 rounded-2xl bg-[#f5f0e0] text-[#5a5a40] text-sm font-bold hover:bg-[#e8e0c8]"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving || !form.title.trim()}
+            className="flex-1 px-4 py-2.5 rounded-2xl bg-[#5a5a40] hover:bg-[#4d4d36] text-white text-sm font-bold shadow-md disabled:opacity-50"
+          >
+            {saving ? 'Salvando...' : 'Salvar alterações'}
           </button>
         </div>
       </div>
