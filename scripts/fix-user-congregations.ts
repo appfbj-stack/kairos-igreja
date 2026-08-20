@@ -16,9 +16,16 @@
  * Uso: docker exec kairos-igreja-app sh -c "cd /app && npx tsx scripts/fix-user-congregations.ts"
  */
 
-import { PrismaClient } from '../generated/prisma/client.js';
+import "dotenv/config";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../generated/prisma/client.js";
 
-const prisma = new PrismaClient();
+const url = process.env.DATABASE_URL;
+if (!url) {
+  throw new Error("DATABASE_URL não definida");
+}
+const adapter = new PrismaPg({ connectionString: url });
+const prisma = new PrismaClient({ adapter });
 
 function pickCongregationId(name: string, email: string, congregations: { id: string; name: string }[]): string | null {
   const txt = `${name} ${email}`.toLowerCase();
