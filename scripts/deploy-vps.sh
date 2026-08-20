@@ -50,6 +50,10 @@ docker run -d \
   -e PORT=3012 \
   -e NODE_ENV=production \
   -e UPLOAD_DIR=/app/uploads \
+  -e ASAAS_API_KEY="${ASAAS_API_KEY:-}" \
+  -e ASAAS_ENV="${ASAAS_ENV:-homologation}" \
+  -e ASAAS_WEBHOOK_TOKEN="${ASAAS_WEBHOOK_TOKEN:-}" \
+  -e ASAAS_INVOICE_BASE="${ASAAS_INVOICE_BASE:-https://www.asaas.com/i}" \
   --restart unless-stopped \
   "$IMAGE"
 
