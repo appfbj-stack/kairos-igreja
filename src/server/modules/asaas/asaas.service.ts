@@ -21,7 +21,7 @@ const ASAAS_ENV = (process.env.ASAAS_ENV || "homologation").toLowerCase();
 export const ASAAS_BASE =
   ASAAS_ENV === "production"
     ? "https://api.asaas.com/v3"
-    : "https://api-hml.asaas.com/v3";
+    : "https://api-sandbox.asaas.com/v3";
 
 export const ASAAS_ENV_LABEL = ASAAS_ENV;
 

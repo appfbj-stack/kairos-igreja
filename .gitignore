@@ -1,11 +1,29 @@
+# dependencies
 node_modules/
-build/
 dist/
-coverage/
-.DS_Store
-*.log
-.env*
-!.env.example
 generated/
+
+# env files (nunca commitar)
+.env
+.env.local
+.env.production
+.env.development
+scripts/*.env
+scripts/asaas-*.env
+
+# logs
+*.log
+npm-debug.log*
+
+# editor
+.vscode/
+.idea/
+.DS_Store
+
+# backups
+*.bak
+*.tmp
+
+# uploads locais
+uploads/
 data/
-backups/
