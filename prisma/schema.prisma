@@ -59,6 +59,7 @@ model Tenant {
   conversations ChatConversation[]
   documents     Document[]
   payments      AsaasPayment[]
+  auditLogs     AuditLog[]
 }
 
 // ============================================================
@@ -169,6 +170,13 @@ model Member {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
+  // ==========================================
+  // LGPD (Lei Geral de Proteção de Dados)
+  // ==========================================
+  consentAcceptedAt       DateTime?  // data/hora que aceitou o termo
+  consentTermsVersion     String?    // versão do termo aceito (ex: "v1.0-2026-08-22")
+  dataExclusaoSolicitada  DateTime?  // direito ao esquecimento (Art. 18, VI)
+  motivoExclusao           String?    // motivo opcional informado pelo titular
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
   congregation Congregation? @relation(fields: [congregationId], references: [id])
@@ -179,6 +187,7 @@ model Member {
   @@index([active])
   @@index([name])
   @@index([status])
+  @@index([consentAcceptedAt])
 }
 
 // ============================================================
@@ -553,4 +562,34 @@ model AsaasPayment {
   @@index([status])
   @@index([asaasSubscriptionId])
   @@index([asaasPaymentId])
+}
+
+// ==========================================
+// LGPD — Audit Log (rastreabilidade de acesso a dados pessoais)
+// Art. 37 LGPD: o controlador deve manter registro das operacoes de tratamento
+// ==========================================
+model AuditLog {
+  id          String   @id @default(uuid())
+  tenantId    String
+  // Quem fez
+  actorUserId String?  // user.id que fez a acao (null = acao do sistema)
+  actorEmail  String?  // denormalizado pra auditoria (mesmo se user for deletado)
+  // Sobre quem (titular dos dados)
+  subjectType String   // "member" | "user" | "tenant" | etc
+  subjectId   String
+  // O que
+  action      String   // "READ" | "CREATE" | "UPDATE" | "DELETE" | "EXPORT" | "CONSENT" | "DELETION_REQUEST"
+  details     String?  // JSON com contexto
+  // Onde
+  ip          String?
+  userAgent   String?
+  // Quando
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([subjectType, subjectId])
+  @@index([actorUserId])
+  @@index([createdAt])
 }

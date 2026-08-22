@@ -27,6 +27,7 @@ import { UsuariosView } from './components/views/UsuariosView';
 import { DocumentosView } from './components/views/DocumentosView';
 import { BillingView } from './components/views/BillingView';
 import { SuperAdminView } from './components/views/SuperAdminView';
+import { PrivacyView } from './components/views/PrivacyView';
 
 import { MemberModal } from './components/MemberModal';
 
@@ -59,6 +60,13 @@ export default function App() {
 }
 
 function AppInner() {
+  // ==========================================
+  // Rota publica /privacidade (LGPD) - nao requer login
+  // ==========================================
+  if (typeof window !== 'undefined' && window.location.pathname === '/privacidade') {
+    return <PrivacyView />;
+  }
+
   const { user, logout } = useAuth();
   if (!user) return <Login />;
 

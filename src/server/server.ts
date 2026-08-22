@@ -15,6 +15,8 @@ import { createCrudRouter } from "./modules/_crud";
 import billingRoutes from "./modules/asaas/billing.routes";
 import asaasWebhookRouter from "./modules/asaas/asaas.webhook";
 import superAdminRoutes from "./modules/super-admin/super-admin.routes";
+import lgpdRoutes from "./modules/lgpd/lgpd.routes";
+import privacidadeRoutes from "./modules/lgpd/privacidade.routes";
 import { authMiddleware } from "./middleware/auth";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { asaasConfigured, ASAAS_ENV_LABEL } from "./modules/asaas/asaas.service";
@@ -100,6 +102,9 @@ async function startServer() {
   app.use("/api/auth", authRoutes);
   app.use("/api/billing", authMiddleware, billingRoutes);
   app.use("/api/super-admin", authMiddleware, superAdminRoutes);
+  app.use("/api/lgpd", lgpdRoutes);
+  // Política de privacidade é pública (LGPD Art. 9 - transparência)
+  app.use("/api/privacidade", privacidadeRoutes);
 
   // ==========================================
   // Subscription guard — bloqueia trial expirado / cancelado

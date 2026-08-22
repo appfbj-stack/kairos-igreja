@@ -67,6 +67,9 @@ export const MemberModal: React.FC<MemberModalProps> = ({
   const [hasCardValidity, setHasCardValidity] = useState(false);
   const [photoUrl, setPhotoUrl] = useState('');
   const [selectedMinistries, setSelectedMinistries] = useState<string[]>([]);
+  // LGPD
+  const [consentAccepted, setConsentAccepted] = useState(false);
+  const [consentTermsVersion] = useState('v1.0-2026-08-22');
 
   useEffect(() => {
     if (initialData) {
@@ -132,6 +135,13 @@ export const MemberModal: React.FC<MemberModalProps> = ({
     e.preventDefault();
     if (!name.trim()) return;
 
+    // LGPD: pra cadastro NOVO (sem initialData), exigir consentimento explicito
+    // (Art. 11, I - tratamento de dado sensivel mediante consentimento)
+    if (!initialData && !consentAccepted) {
+      alert('Para cadastrar um novo membro, é necessário aceitar a Política de Privacidade. (LGPD)');
+      return;
+    }
+
     const payload: Partial<Member> = {
       ...(initialData?.id ? { id: initialData.id } : {}),
       name: name.trim(),
@@ -150,6 +160,13 @@ export const MemberModal: React.FC<MemberModalProps> = ({
       photoUrl: photoUrl.trim() || undefined,
       ministries: selectedMinistries,
       joinedAt: initialData?.joinedAt || new Date().toISOString().split('T')[0],
+      // LGPD
+      ...(consentAccepted && !initialData?.id
+        ? {
+            consentAcceptedAt: new Date().toISOString(),
+            consentTermsVersion,
+          }
+        : {}),
     };
 
     onSave(payload as Member);
@@ -579,6 +596,38 @@ export const MemberModal: React.FC<MemberModalProps> = ({
               })}
             </div>
           </div>
+
+          {/* LGPD: Consentimento (Art. 11, I) - obrigatorio para novos cadastros */}
+          {!initialData && (
+            <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-200 space-y-2">
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="consent-lgpd"
+                  checked={consentAccepted}
+                  onChange={(e) => setConsentAccepted(e.target.checked)}
+                  className="mt-1 w-5 h-5 rounded border-2 border-amber-400 text-amber-600 focus:ring-amber-500 cursor-pointer shrink-0"
+                />
+                <label htmlFor="consent-lgpd" className="text-xs text-[#2a2a20] leading-relaxed cursor-pointer">
+                  <strong className="text-rose-700">*</strong> Li e aceito a{' '}
+                  <a
+                    href="/privacidade"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#5a5a40] font-semibold underline hover:no-underline"
+                  >
+                    Política de Privacidade
+                  </a>{' '}
+                  e autorizo o tratamento dos dados pessoais e religiosos (dado sensível, conforme Art. 5°, II da LGPD)
+                  para as finalidades descritas (cadastro, comunicação, ministérios, células).{' '}
+                  <span className="text-[#8a8a70]">({consentTermsVersion})</span>
+                </label>
+              </div>
+              <p className="text-[10px] text-[#5a5a40] ml-8">
+                ⚠ O consentimento pode ser revogado a qualquer momento em "Meu Perfil → Privacidade".
+              </p>
+            </div>
+          )}
 
           {/* Modal Actions */}
           <div className="pt-4 flex items-center justify-end gap-3 border-t border-[#e0e0d0]">
