@@ -38,7 +38,8 @@ async function startServer() {
         // Permite requests sem Origin (ex: curl, mobile apps, webhooks Asaas)
         if (!origin) return callback(null, true);
         if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-        return callback(new Error(`Origem bloqueada pelo CORS: ${origin}`));
+        // Bloqueia com 403 (em vez de 500) sem revelar lista de origens
+        return callback(null, false);
       },
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
