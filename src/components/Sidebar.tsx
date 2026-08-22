@@ -17,6 +17,7 @@ import {
   UserCog,
   FileText,
   CreditCard,
+  Shield,
 } from 'lucide-react';
 import { ViewMode } from '../types';
 
@@ -29,6 +30,8 @@ interface SidebarProps {
   prayersCount?: number;
   /** Se true, mostra a entrada "Usuários" (só ADMIN/SUPER_ADMIN). */
   isAdmin?: boolean;
+  /** Role do user (para decidir se mostra item Super Admin). */
+  user?: { role: string } | null;
 }
 
 interface NavItem {
@@ -37,6 +40,7 @@ interface NavItem {
   icon: React.ElementType;
   badge?: number;
   adminOnly?: boolean;
+  superAdminOnly?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -47,6 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   unreadChatCount = 3,
   prayersCount = 2,
   isAdmin = false,
+  user = null,
 }) => {
   const allItems: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -64,10 +69,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'documentos', label: 'Documentos', icon: FileText },
     { id: 'usuarios', label: 'Usuários', icon: UserCog, adminOnly: true },
     { id: 'billing', label: 'Assinatura', icon: CreditCard, adminOnly: true },
+    { id: 'super-admin', label: 'Super Admin', icon: Shield, superAdminOnly: true },
   ];
 
   // Filtra: esconde itens adminOnly se o user não for admin
-  const navItems = allItems.filter((i) => !i.adminOnly || isAdmin);
+  // superAdminOnly é restrito a SUPER_ADMIN
+  const isSuperAdmin = (user as any)?.role === 'SUPER_ADMIN';
+  const navItems = allItems.filter((i) => {
+    if (i.superAdminOnly) return isSuperAdmin;
+    if (i.adminOnly) return isAdmin;
+    return true;
+  });
 
   return (
     <>

@@ -26,6 +26,7 @@ import { ChatView } from './components/views/ChatView';
 import { UsuariosView } from './components/views/UsuariosView';
 import { DocumentosView } from './components/views/DocumentosView';
 import { BillingView } from './components/views/BillingView';
+import { SuperAdminView } from './components/views/SuperAdminView';
 
 import { MemberModal } from './components/MemberModal';
 
@@ -793,6 +794,7 @@ function AppInner() {
         unreadChatCount={3}
         prayersCount={prayers.filter((p) => p.status === 'em_oracao').length}
         isAdmin={user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'}
+        user={user}
       />
 
       <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
@@ -956,6 +958,10 @@ function AppInner() {
                 setCurrentView('dashboard');
               }}
             />
+          )}
+
+          {currentView === 'super-admin' && user?.role === 'SUPER_ADMIN' && (
+            <SuperAdminView />
           )}
         </main>
       </div>

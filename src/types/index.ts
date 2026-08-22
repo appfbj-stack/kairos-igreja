@@ -13,7 +13,8 @@ export type ViewMode =
   | 'chat'
   | 'usuarios'
   | 'documentos'
-  | 'billing';
+  | 'billing'
+  | 'super-admin';
 
 export type DocumentType = 'BATISMO' | 'OBREIRO' | 'CRACHA' | 'EQUIPAMENTO' | 'OUTRO';
 

@@ -21,6 +21,7 @@ const EXEMPT_PREFIXES = [
   "/api/asaas/webhook",
   "/api/health",
   "/api/auth",
+  "/api/super-admin", // Super Admin não é bloqueado por billing
 ];
 
 export async function requireActiveSubscription(
@@ -40,11 +41,14 @@ export async function requireActiveSubscription(
         subscriptionStatus: true,
         trialEndsAt: true,
         subscriptionEndsAt: true,
+        diasTolerancia: true,
+        motivoBloqueio: true,
       },
     });
     if (!tenant) return next();
 
     const now = new Date();
+    const graceMs = (tenant.diasTolerancia ?? 3) * 86400000;
 
     // Trial válido (ou legado sem trialEndsAt — libera retroativamente)
     if (tenant.subscriptionStatus === "TRIAL") {
@@ -61,22 +65,23 @@ export async function requireActiveSubscription(
       return next();
     }
 
-    // Grace period (OVERDUE) — libera por mais 3 dias
+    // Grace period (OVERDUE) — libera por mais N dias (configurável pelo Super Admin)
     if (tenant.subscriptionStatus === "OVERDUE") {
       if (
         tenant.subscriptionEndsAt &&
-        tenant.subscriptionEndsAt.getTime() + 3 * 86400000 > now.getTime()
+        tenant.subscriptionEndsAt.getTime() + graceMs > now.getTime()
       ) {
         return next();
       }
     }
 
-    // Bloqueado
+    // Bloqueio manual (Super Admin) ou trial expirado / cancelado
     return res.status(402).json({
       success: false,
       code: "SUBSCRIPTION_REQUIRED",
       error: "Trial expirado ou assinatura inativa",
       status: tenant.subscriptionStatus,
+      motivoBloqueio: tenant.motivoBloqueio,
       trialEndsAt: tenant.trialEndsAt,
       subscriptionEndsAt: tenant.subscriptionEndsAt,
     });
