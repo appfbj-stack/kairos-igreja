@@ -52,10 +52,12 @@ COPY --from=builder /app/metadata.json ./metadata.json
 COPY --from=builder /app/assets ./assets
 COPY --from=builder /app/scripts ./scripts
 
-# Volume para backups locais do banco (opcional, mesmo com Postgres)
-RUN mkdir -p /app/backups
-# Volume para uploads de documentos (PDFs, imagens) — Dokploy monta aqui
-RUN mkdir -p /app/uploads
+# Cria diretórios de runtime e transfere ownership para o user `node` (UID 1000)
+RUN mkdir -p /app/backups /app/uploads /app/assets-runtime && \
+    chown -R node:node /app
+
+# Não rodar como root — usa o user `node` que já existe na imagem oficial
+USER node
 
 # Healthcheck (consulta a API real)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \

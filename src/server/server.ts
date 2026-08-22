@@ -16,14 +16,37 @@ import superAdminRoutes from "./modules/super-admin/super-admin.routes";
 import { authMiddleware } from "./middleware/auth";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { asaasConfigured, ASAAS_ENV_LABEL } from "./modules/asaas/asaas.service";
+import { secureStaticUploads } from "./middleware/secureUploads";
 
 async function startServer() {
   const app = express();
   const PORT = env.PORT;
 
-  // Middlewares
-  app.use(cors());
-  app.use(express.json({ limit: "10mb" }));
+  // ==========================================
+  // CORS — restrito a origens confiáveis
+  // ==========================================
+  const ALLOWED_ORIGINS = [
+    "https://igrejasede.fbautomacao.space",
+    "https://www.igrejasede.fbautomacao.space",
+    "http://localhost:3000",
+    "http://localhost:3007",
+    "http://localhost:5173",
+  ];
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        // Permite requests sem Origin (ex: curl, mobile apps, webhooks Asaas)
+        if (!origin) return callback(null, true);
+        if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+        return callback(new Error(`Origem bloqueada pelo CORS: ${origin}`));
+      },
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "asaas-access-token", "x-asaas-access-token"],
+      maxAge: 86400,
+    })
+  );
+  app.use(express.json({ limit: "1mb" }));
 
   // ==========================================
   // Webhook Asaas — PÚBLICO (validado por token próprio)
@@ -53,18 +76,14 @@ async function startServer() {
   app.use("/api/documents", documentRoutes);
 
   // ==========================================
-  // Uploads — serve arquivos estáticos de /uploads
+  // Uploads — arquivos protegidos por auth + tenant check
+  // (evita IDOR: qualquer pessoa com ID do tenant baixava tudo)
   // ==========================================
   const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
-  app.use("/uploads", express.static(uploadDir, {
-    maxAge: "7d",
-    setHeaders: (res) => {
-      res.setHeader("Content-Disposition", "inline");
-    },
-  }));
+  app.use("/uploads", authMiddleware, secureStaticUploads);
 
   // Rotas CRUD genéricas (multi-tenant, soft-delete, busca, paginação)
   app.use("/api/celulas", createCrudRouter("celula", ["name", "leaderName"]));

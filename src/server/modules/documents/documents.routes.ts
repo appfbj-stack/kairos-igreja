@@ -22,6 +22,7 @@ import { authMiddleware } from "../../middleware/auth";
 import { asyncHandler } from "../../middleware/asyncHandler";
 import { prisma } from "../../config/database";
 import { AuthRequest } from "../../types";
+import { validateFileMagicBytes } from "../../middleware/magicBytes";
 
 // Diretório de uploads
 const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
@@ -108,6 +109,19 @@ router.post(
     const file = (req as any).file;
     if (!file) {
       return res.status(400).json({ success: false, error: "Arquivo obrigatório (campo 'file')" });
+    }
+
+    // ==========================================
+    // Validação de magic bytes (anti-disguise)
+    // Impede atacante de mandar .exe com Content-Type falso
+    // ==========================================
+    const kind = await validateFileMagicBytes(file.path, file.mimetype);
+    if (!kind) {
+      try { fs.unlinkSync(file.path); } catch { /* ignore */ }
+      return res.status(400).json({
+        success: false,
+        error: `Conteúdo do arquivo não corresponde ao tipo declarado (${file.mimetype}). Upload rejeitado por segurança.`,
+      });
     }
 
     const { title, type, memberId, description } = req.body || {};
