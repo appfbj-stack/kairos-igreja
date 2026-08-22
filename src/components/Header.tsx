@@ -54,10 +54,13 @@ export const Header: React.FC<HeaderProps> = ({
   onSearchChange,
   currentUser,
 }) => {
-  const { logout } = useAuth();
+  const { user: authUser, logout } = useAuth();
   const [showCongregationDropdown, setShowCongregationDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+
+  // congregationName do contexto (se houver) tem prioridade sobre a prop
+  const userCongregationName = authUser?.congregationName || (currentUser as any)?.congregationName;
 
   const selectedCongregation =
     congregations.find((c) => c.id === selectedCongregationId) || congregations[0];
@@ -249,16 +252,16 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${roleColor(currentUser.role)}`}>
                       {roleLabel(currentUser.role)}
                     </span>
-                    {user?.congregationName && (
+                    {userCongregationName && (
                       <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-[#5a5a40]/10 text-[#5a5a40]">
-                        {user.congregationName}
+                        {userCongregationName}
                       </span>
                     )}
                   </div>
                   <p className="text-[10px] text-[#8a8a70] mt-2">Escopo de acesso: {
                     currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN"
                       ? "Todas as 14 igrejas"
-                      : (user?.congregationName || "—")
+                      : (userCongregationName || "—")
                   }</p>
                 </div>
                 <button
