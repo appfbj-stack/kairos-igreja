@@ -1,6 +1,8 @@
 import express from "express";
 import path from "path";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { createServer as createViteServer } from "vite";
 import fs from "fs";
 import { env } from "./config/env";
@@ -21,6 +23,19 @@ import { secureStaticUploads } from "./middleware/secureUploads";
 async function startServer() {
   const app = express();
   const PORT = env.PORT;
+
+  // ==========================================
+  // Helmet — headers de segurança HTTP padrão
+  // (HSTS, X-Frame-Options, X-Content-Type-Options, etc.)
+  // ==========================================
+  app.use(
+    helmet({
+      // CSP é gerenciado pelo Caddy; desabilita pra evitar conflito em dev
+      contentSecurityPolicy: false,
+      // Permite carregar o app em iframe de mesmo domínio (se necessário)
+      crossOriginEmbedderPolicy: false,
+    })
+  );
 
   // ==========================================
   // CORS — restrito a origens confiáveis
@@ -48,6 +63,30 @@ async function startServer() {
     })
   );
   app.use(express.json({ limit: "1mb" }));
+
+  // ==========================================
+  // Rate limiter — anti brute-force no /api/auth
+  // 10 tentativas a cada 15min por IP (suficiente pra esquecer senha, mas bloqueia brute force)
+  // ==========================================
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: "Muitas tentativas. Tente novamente em 15 minutos." },
+  });
+  app.use("/api/auth/login", authLimiter);
+  app.use("/api/auth/register", authLimiter);
+
+  // Rate limiter global (proteção geral contra DoS / scraping)
+  const globalLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 300, // 300 req/min por IP (razoável pra um app em uso)
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: "Rate limit exceeded" },
+  });
+  app.use("/api", globalLimiter);
 
   // ==========================================
   // Webhook Asaas — PÚBLICO (validado por token próprio)
