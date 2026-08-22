@@ -31,6 +31,16 @@ model Tenant {
   asaasCustomerId      String?
   asaasSubscriptionId  String?
   planKey              String     @default("BASICO")  // BASICO | PRO
+  // ─── Dados comerciais da igreja ──────────────────────
+  cnpj                 String?  // CNPJ (14 dígitos, validado no backend)
+  telefone             String?
+  email                String?  // email de contato (pode ser ≠ do admin)
+  endereco             String?
+  // ─── Controle de bloqueio manual ────────────────────
+  diasTolerancia       Int        @default(3)  // dias de grace após vencimento
+  motivoBloqueio       String?  // texto livre preenchido pelo Super Admin
+  bloqueadoEm          DateTime?  // quando foi bloqueado manualmente
+  bloqueadoPor         String?  // id do Super Admin que bloqueou (audit)
 
   users         User[]
   congregations Congregation[]
