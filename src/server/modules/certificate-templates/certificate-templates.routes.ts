@@ -43,11 +43,11 @@ function safeOriginalName(name: string): string {
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, TEMPLATES_DIR),
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
+    // Salva primeiro com nome temporário; renomeamos no handler com o type correto
     const ts = Date.now();
-    const rawType = String(req.body?.type || 'GERAL').toUpperCase();
-    const t = (ALLOWED_TYPES as readonly string[]).includes(rawType) ? rawType : 'GERAL';
-    cb(null, `${t}-${ts}-${safeOriginalName(file.originalname)}`);
+    const safe = safeOriginalName(file.originalname);
+    cb(null, `TMP-${ts}-${safe}`);
   },
 });
 
@@ -115,8 +115,19 @@ router.post('/upload', authMiddleware, upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: 'Arquivo é obrigatório' });
   }
-  const t = statTemplate(req.file.filename);
-  res.json({ success: true, template: t });
+  // Renomeia com o type correto (multer chama filename() antes do body ser parseado)
+  const rawType = String(req.body?.type || 'GERAL').toUpperCase();
+  const t = (ALLOWED_TYPES as readonly string[]).includes(rawType) ? rawType : 'GERAL';
+  const tmpName = req.file.filename;
+  const finalName = `${t}-${Date.now()}-${safeOriginalName(req.file.originalname)}`;
+  try {
+    fs.renameSync(path.join(TEMPLATES_DIR, tmpName), path.join(TEMPLATES_DIR, finalName));
+  } catch (e: any) {
+    // Se rename falhar, mantém o TMP (não bloqueia o upload)
+    console.error('[certificate-templates] rename error:', e);
+  }
+  const stat = statTemplate(finalName);
+  res.json({ success: true, template: stat });
 });
 
 // DELETE /api/certificate-templates/:filename
