@@ -1541,6 +1541,7 @@ const TemplatesView: React.FC<{ showToast: (msg: string, type?: 'success' | 'err
             <TemplateCard
               key={t.filename}
               t={t}
+              showToast={showToast}
               onDelete={() => setDeleteConfirm(t)}
             />
           ))}
@@ -1646,17 +1647,37 @@ const TemplatesView: React.FC<{ showToast: (msg: string, type?: 'success' | 'err
   );
 };
 
-const TemplateCard: React.FC<{ t: CertificateTemplate; onDelete: () => void }> = ({ t, onDelete }) => {
+const TemplateCard: React.FC<{ t: CertificateTemplate; onDelete: () => void; showToast: (msg: string, type?: 'success' | 'error') => void }> = ({ t, onDelete, showToast }) => {
   const isImg = /\.(jpe?g|png)$/i.test(t.ext);
   const isPdf = /\.pdf$/i.test(t.ext);
   const isHtml = /\.html?$/i.test(t.ext);
+
+  // Abre o arquivo autenticado. Para HTML injeta botões de Imprimir/Voltar; para
+  // PDF/imagem abre direto em nova aba via blob URL (sem precisar de token).
+  const openTemplate = async () => {
+    const token = localStorage.getItem('kairos_token');
+    try {
+      const res = await fetch(t.url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const w = window.open(blobUrl, '_blank');
+      if (!w) {
+        showToast('Pop-up bloqueado. Permita pop-ups para abrir o modelo.', 'error');
+        URL.revokeObjectURL(blobUrl);
+      }
+    } catch (e: any) {
+      showToast(e.message || 'Erro ao abrir modelo', 'error');
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-[#e8e4d8] shadow-sm hover:shadow-md transition-shadow group flex gap-3 p-3">
-      <a
-        href={t.url}
-        target="_blank"
-        rel="noreferrer"
-        className="shrink-0 w-16 h-16 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 relative overflow-hidden flex items-center justify-center"
+      <button
+        onClick={openTemplate}
+        className="shrink-0 w-16 h-16 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 relative overflow-hidden flex items-center justify-center hover:from-slate-200 hover:to-slate-300"
         title="Abrir modelo"
       >
         {isImg ? (
@@ -1668,7 +1689,7 @@ const TemplateCard: React.FC<{ t: CertificateTemplate; onDelete: () => void }> =
         ) : (
           <File className="w-7 h-7 text-[#a68a64]" />
         )}
-      </a>
+      </button>
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="flex items-start gap-2">
           <span className={`shrink-0 px-2 py-0.5 rounded-full border text-[9px] font-extrabold tracking-wider uppercase ${TEMPLATE_TYPE_COLOR[t.type]}`}>
@@ -1685,16 +1706,14 @@ const TemplateCard: React.FC<{ t: CertificateTemplate; onDelete: () => void }> =
           <Calendar className="w-2.5 h-2.5" /> {new Date(t.createdAt).toLocaleDateString('pt-BR')}
         </div>
         <div className="mt-auto pt-2 flex items-center gap-1">
-          <a
-            href={t.url}
-            target="_blank"
-            rel="noreferrer"
+          <button
+            onClick={openTemplate}
             className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-[#5a5a40] hover:bg-[#4d4d36] text-white text-[11px] font-bold"
-            title="Abrir modelo"
+            title="Abrir modelo (já pronto pra imprimir)"
           >
             <ExternalLink className="w-3 h-3" />
             Abrir
-          </a>
+          </button>
           <a
             href={t.url}
             download={t.originalName}
