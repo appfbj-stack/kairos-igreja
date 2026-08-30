@@ -145,6 +145,12 @@ function AppInner() {
         status: m.status ?? 'membro',
         joinedAt: m.joinedAt ? String(m.joinedAt).split('T')[0] : new Date().toISOString().split('T')[0],
         congregationId: m.congregationId ?? '',
+        // Backend retorna congregation nested ({ name }) mas o front usa congregationName
+        congregationName: m.congregation?.name ?? m.congregationName ?? null,
+        // Certificados
+        baptizedBy: m.baptizedBy ?? null,
+        obreiroSince: m.obreiroSince ? String(m.obreiroSince).split('T')[0] : null,
+        obreiroRole: m.obreiroRole ?? null,
       });
 
       const toCelula = (c: any): Celula => ({

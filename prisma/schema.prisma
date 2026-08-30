@@ -163,6 +163,9 @@ model Member {
   filiation      String?
   cardValidity   DateTime?
   baptismDate    DateTime?
+  baptizedBy     String?   // pastor que realizou o batismo (certidão de batismo)
+  obreiroSince   DateTime? // data que se tornou obreiro
+  obreiroRole    String?   // função: presbítero, diácono, evangelista, etc
   celulaId       String?
   ministries     String?
   joinedAt       DateTime  @default(now())

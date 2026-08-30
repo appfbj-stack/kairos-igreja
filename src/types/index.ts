@@ -60,8 +60,10 @@ export interface Member {
   role?: string; // Função / Cargo Eclesiástico (ex: Pastor, Diácono, Presbítero, Líder, etc.)
   celulaId?: string;
   congregationId: string;
+  congregationName?: string;
   ministries: string[];
   baptismDate?: string;
+  baptizedBy?: string;
   birthDate?: string;
   address?: string;
   filiation?: string;
@@ -69,6 +71,8 @@ export interface Member {
   cardValidity?: string;
   photoUrl?: string;
   joinedAt: string;
+  obreiroSince?: string;
+  obreiroRole?: string;
 }
 
 export interface Celula {

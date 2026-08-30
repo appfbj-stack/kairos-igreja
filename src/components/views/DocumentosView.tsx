@@ -15,7 +15,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import {
   FileText, Upload, Search, Filter, Trash2, Download, ExternalLink,
   File, Image as ImageIcon, User, Calendar, X, AlertCircle, Sparkles,
-  Edit2,
+  Edit2, Award, Printer, Save,
 } from 'lucide-react';
 import { KairosDocument, DocumentType, Member } from '../../types';
 import { dataService } from '../../services/dataService';
@@ -94,6 +94,12 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
     title: '', description: '', type: 'OUTRO', memberId: '',
   });
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Certificados (gerar/visualizar)
+  const [certModal, setCertModal] = useState<{ memberId: string; type: 'BATISMO' | 'OBREIRO' } | null>(null);
+  const [certPreview, setCertPreview] = useState<{ member: Member; type: 'BATISMO' | 'OBREIRO'; html: string; saving: boolean } | null>(null);
+  const [certSaving, setCertSaving] = useState(false);
+  const [certError, setCertError] = useState<string | null>(null);
 
   // Toast (feedback discreto)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -229,6 +235,87 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
     }
   };
 
+  // ─────────────────────────────────────────────────────────
+  // Certificados
+  // ─────────────────────────────────────────────────────────
+  const generateCertificate = async (
+    member: Member,
+    type: 'BATISMO' | 'OBREIRO',
+    save: boolean
+  ): Promise<{ html: string; documentId?: string } | null> => {
+    const token = localStorage.getItem('kairos_token');
+    const url = `/api/certificates/preview?memberId=${encodeURIComponent(member.id)}&type=${type}&save=${save}`;
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(txt || `HTTP ${res.status}`);
+    }
+    if (save) {
+      const json = await res.json();
+      return { html: json.html, documentId: json.documentId };
+    }
+    return { html: await res.text() };
+  };
+
+  const openCertificatePreview = async (member: Member, type: 'BATISMO' | 'OBREIRO') => {
+    setCertError(null);
+    setCertPreview({ member, type, html: '', saving: true });
+    try {
+      const result = await generateCertificate(member, type, false);
+      if (result) {
+        setCertPreview({ member, type, html: result.html, saving: false });
+      }
+    } catch (e: any) {
+      setCertError(e.message || 'Erro ao gerar certificado');
+      setCertPreview(null);
+    }
+  };
+
+  const saveCertificate = async () => {
+    if (!certPreview) return;
+    setCertSaving(true);
+    setCertError(null);
+    try {
+      const result = await generateCertificate(certPreview.member, certPreview.type, true);
+      if (result) {
+        showToast('Certificado salvo no acervo', 'success');
+        await onReload();
+        setCertPreview((cp) => cp ? { ...cp, html: result.html } : cp);
+      }
+    } catch (e: any) {
+      setCertError(e.message || 'Erro ao salvar');
+    } finally {
+      setCertSaving(false);
+    }
+  };
+
+  const printCertificate = () => {
+    if (!certPreview) return;
+    // Abre o HTML em nova janela + auto print
+    const w = window.open('', '_blank', 'width=900,height=1100');
+    if (!w) {
+      showToast('Pop-up bloqueado. Permita pop-ups para imprimir.', 'error');
+      return;
+    }
+    w.document.write(certPreview.html);
+    w.document.close();
+    // Esconde os botões no print
+    w.onload = () => w.print();
+  };
+
+  const openSavedCertificate = async (doc: KairosDocument) => {
+    // Re-busca o HTML do servidor e mostra no preview
+    const member = members.find((m) => m.id === doc.memberId);
+    if (!member) {
+      showToast('Membro não encontrado para reimprimir', 'error');
+      return;
+    }
+    const type = doc.type as 'BATISMO' | 'OBREIRO';
+    await openCertificatePreview(member, type);
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f5f5f0] overflow-hidden">
       {/* Cabeçalho */}
@@ -243,13 +330,23 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
               Certidões, crachás, manuais de equipamento. Upload de PDF ou imagem (até 20 MB).
             </p>
           </div>
-          <button
-            onClick={() => { resetUpload(); setIsUploadOpen(true); }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#5a5a40] hover:bg-[#4d4d36] text-[#f5f5f0] rounded-2xl text-sm font-bold shadow-md"
-          >
-            <Upload className="w-4 h-4" />
-            Upload de Documento
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCertModal({ memberId: '', type: 'BATISMO' })}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#a68a64] hover:bg-[#8a7350] text-white rounded-2xl text-sm font-bold shadow-md"
+              title="Gerar certidão de batismo ou certificado de obreiro"
+            >
+              <Award className="w-4 h-4" />
+              Gerar Certificado
+            </button>
+            <button
+              onClick={() => { resetUpload(); setIsUploadOpen(true); }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#5a5a40] hover:bg-[#4d4d36] text-[#f5f5f0] rounded-2xl text-sm font-bold shadow-md"
+            >
+              <Upload className="w-4 h-4" />
+              Upload de Documento
+            </button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -428,6 +525,268 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Cert Modal - escolha de membro + tipo */}
+      {certModal && (
+        <CertModal
+          memberId={certModal.memberId}
+          type={certModal.type}
+          members={members}
+          onClose={() => { setCertModal(null); setCertError(null); }}
+          onChange={(patch) => setCertModal((m) => m ? { ...m, ...patch } : m)}
+          onSubmit={async (m, t) => {
+            setCertModal(null);
+            await openCertificatePreview(m, t);
+          }}
+          error={certError}
+        />
+      )}
+
+      {/* Cert Preview - mostra HTML pronto para imprimir/salvar */}
+      {certPreview && (
+        <CertPreviewModal
+          member={certPreview.member}
+          type={certPreview.type}
+          html={certPreview.html}
+          saving={certPreview.saving || certSaving}
+          onClose={() => { setCertPreview(null); setCertError(null); }}
+          onPrint={printCertificate}
+          onSave={saveCertificate}
+          error={certError}
+        />
+      )}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════
+// Cert Modal — escolha de membro e tipo
+// ═══════════════════════════════════════════════════════════
+const CertModal: React.FC<{
+  memberId: string;
+  type: 'BATISMO' | 'OBREIRO';
+  members: Member[];
+  onClose: () => void;
+  onChange: (patch: Partial<{ memberId: string; type: 'BATISMO' | 'OBREIRO' }>) => void;
+  onSubmit: (member: Member, type: 'BATISMO' | 'OBREIRO') => void;
+  error: string | null;
+}> = ({ memberId, type, members, onClose, onChange, onSubmit, error }) => {
+  const selected = members.find((m) => m.id === memberId);
+  const isValid = !!selected && (
+    (type === 'BATISMO' && (selected.baptismDate || selected.baptized)) ||
+    type === 'OBREIRO'
+  );
+
+  const helper = (() => {
+    if (!selected) return null;
+    if (type === 'BATISMO' && !selected.baptismDate && !selected.baptized) {
+      return { kind: 'warn' as const, msg: 'Este membro não tem data de batismo cadastrada. Preencha no cadastro do membro antes de gerar.' };
+    }
+    if (type === 'OBREIRO' && !selected.obreiroSince && !selected.obreiroRole) {
+      return { kind: 'warn' as const, msg: 'Este membro não tem dados de obreiro (data/cargo). Preencha no cadastro do membro antes de gerar.' };
+    }
+    return null;
+  })();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2a2a20]/60 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+        <div className="px-6 py-5 border-b border-[#e8e4d8] flex items-center justify-between">
+          <h2 className="text-lg font-serif font-bold text-[#2a2a20] flex items-center gap-2">
+            <Award className="w-5 h-5 text-[#a68a64]" />
+            Gerar Certificado
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#f5f0e0] text-[#7a7060]">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" /> {error}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-extrabold tracking-widest text-[#7a7060] uppercase mb-1.5">Tipo de certificado *</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onChange({ type: 'BATISMO' })}
+                className={`px-4 py-3 rounded-2xl border-2 text-sm font-bold transition-colors ${
+                  type === 'BATISMO'
+                    ? 'bg-emerald-50 border-emerald-400 text-emerald-800'
+                    : 'bg-white border-[#e8e4d8] text-[#5a5a40] hover:border-emerald-300'
+                }`}
+              >
+                <Sparkles className="w-4 h-4 inline-block mr-1" />
+                Certidão de Batismo
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange({ type: 'OBREIRO' })}
+                className={`px-4 py-3 rounded-2xl border-2 text-sm font-bold transition-colors ${
+                  type === 'OBREIRO'
+                    ? 'bg-purple-50 border-purple-400 text-purple-800'
+                    : 'bg-white border-[#e8e4d8] text-[#5a5a40] hover:border-purple-300'
+                }`}
+              >
+                <Award className="w-4 h-4 inline-block mr-1" />
+                Certificado de Obreiro
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-extrabold tracking-widest text-[#7a7060] uppercase mb-1.5">Membro *</label>
+            <select
+              value={memberId}
+              onChange={(e) => onChange({ memberId: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-2xl border border-[#e8e4d8] text-sm focus:border-[#a68a64] outline-none"
+            >
+              <option value="">— Selecione um membro —</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+            {helper && (
+              <p className={`mt-2 text-xs flex items-start gap-1.5 ${
+                helper.kind === 'warn' ? 'text-amber-700' : 'text-[#7a7060]'
+              }`}>
+                <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                {helper.msg}
+              </p>
+            )}
+          </div>
+
+          {selected && (
+            <div className="p-3 rounded-2xl bg-[#faf8f0] border border-[#e8e4d8] text-xs text-[#5a5a40] space-y-0.5">
+              <p><strong>Congregação:</strong> {selected.congregationName || '—'}</p>
+              {type === 'BATISMO' && (
+                <>
+                  <p><strong>Data de batismo:</strong> {selected.baptismDate
+                    ? new Date(selected.baptismDate).toLocaleDateString('pt-BR')
+                    : '—'}</p>
+                  <p><strong>Batizado por:</strong> {selected.baptizedBy || '—'}</p>
+                </>
+              )}
+              {type === 'OBREIRO' && (
+                <>
+                  <p><strong>Data de obreiro:</strong> {selected.obreiroSince
+                    ? new Date(selected.obreiroSince).toLocaleDateString('pt-BR')
+                    : '—'}</p>
+                  <p><strong>Função:</strong> {selected.obreiroRole || '—'}</p>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-[#e8e4d8] flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 rounded-2xl bg-[#f5f0e0] text-[#5a5a40] text-sm font-bold hover:bg-[#e8e0c8]"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => selected && onSubmit(selected, type)}
+            disabled={!isValid}
+            className="flex-1 px-4 py-2.5 rounded-2xl bg-[#a68a64] hover:bg-[#8a7350] text-white text-sm font-bold shadow-md disabled:opacity-50"
+          >
+            Gerar Preview
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════
+// Cert Preview Modal — mostra HTML em iframe + ações
+// ═══════════════════════════════════════════════════════════
+const CertPreviewModal: React.FC<{
+  member: Member;
+  type: 'BATISMO' | 'OBREIRO';
+  html: string;
+  saving: boolean;
+  onClose: () => void;
+  onPrint: () => void;
+  onSave: () => void;
+  error: string | null;
+}> = ({ member, type, html, saving, onClose, onPrint, onSave, error }) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2a2a20]/70 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl h-[92vh] overflow-hidden flex flex-col">
+        <div className="px-6 py-4 border-b border-[#e8e4d8] flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="text-lg font-serif font-bold text-[#2a2a20] flex items-center gap-2">
+              {type === 'BATISMO' ? (
+                <Sparkles className="w-5 h-5 text-emerald-600" />
+              ) : (
+                <Award className="w-5 h-5 text-purple-600" />
+              )}
+              {type === 'BATISMO' ? 'Certidão de Batismo' : 'Certificado de Obreiro'}
+            </h2>
+            <p className="text-xs text-[#7a7060]">
+              {member.name} · Preview de impressão
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onPrint}
+              disabled={!html}
+              className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#5a5a40] hover:bg-[#4d4d36] text-white text-sm font-bold shadow-md disabled:opacity-50"
+              title="Abrir em nova janela pronto para imprimir ou salvar como PDF"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimir / Salvar PDF
+            </button>
+            <button
+              onClick={onSave}
+              disabled={!html || saving}
+              className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-md disabled:opacity-50"
+              title="Salvar no acervo de Documentos para reimprimir depois"
+            >
+              <Save className="w-4 h-4" />
+              {saving ? 'Salvando...' : 'Salvar no Acervo'}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-[#f5f0e0] text-[#7a7060]"
+              title="Fechar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mx-6 mt-3 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" /> {error}
+          </div>
+        )}
+
+        <div className="flex-1 bg-[#e8e4d8] p-3 overflow-hidden">
+          {html ? (
+            <iframe
+              title="Certificado"
+              srcDoc={html}
+              className="w-full h-full bg-white rounded-2xl shadow-md border border-[#d4ccb0]"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-[#7a7060] text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-[#a68a64] border-t-transparent rounded-full animate-spin" />
+                Gerando certificado...
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
