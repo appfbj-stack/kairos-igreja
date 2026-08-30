@@ -301,9 +301,22 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
     }
     w.document.write(certPreview.html);
     w.document.close();
-    // Esconde os botões no print
-    w.onload = () => w.print();
+    w.focus();
+    // setTimeout pq document.write pode nao disparar onload confiavelmente
+    setTimeout(() => {
+      try { w.print(); } catch (e) { /* user pode cancelar */ }
+    }, 400);
   };
+
+  // Auto-abrir impressora quando o preview ficar pronto
+  React.useEffect(() => {
+    if (!certPreview || certPreview.saving || !certPreview.html) return;
+    const t = setTimeout(() => {
+      printCertificate();
+    }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [certPreview?.html]);
 
   const openSavedCertificate = async (doc: KairosDocument) => {
     // Re-busca o HTML do servidor e mostra no preview
