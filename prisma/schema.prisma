@@ -166,6 +166,12 @@ model Member {
   baptizedBy     String?   // pastor que realizou o batismo (certidão de batismo)
   obreiroSince   DateTime? // data que se tornou obreiro
   obreiroRole    String?   // função: presbítero, diácono, evangelista, etc
+  // Certidoes extras
+  dataApresentacao DateTime? // data da apresentacao (crianca)
+  dataCasamento    DateTime? // data do casamento
+  conjugeName      String?   // nome do conjuge (certidao de casamento)
+  mae              String?   // nome da mae (apresentacao)
+  pai              String?   // nome do pai (apresentacao)
   celulaId       String?
   ministries     String?
   joinedAt       DateTime  @default(now())
@@ -460,6 +466,8 @@ model Asset {
 enum DocumentType {
   BATISMO
   OBREIRO
+  APRESENTACAO
+  CASAMENTO
   CRACHA
   EQUIPAMENTO
   OUTRO

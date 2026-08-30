@@ -16,7 +16,7 @@ export type ViewMode =
   | 'billing'
   | 'super-admin';
 
-export type DocumentType = 'BATISMO' | 'OBREIRO' | 'CRACHA' | 'EQUIPAMENTO' | 'OUTRO';
+export type DocumentType = 'BATISMO' | 'OBREIRO' | 'APRESENTACAO' | 'CASAMENTO' | 'CRACHA' | 'EQUIPAMENTO' | 'OUTRO';
 
 export interface KairosDocument {
   id: string;
@@ -73,6 +73,11 @@ export interface Member {
   joinedAt: string;
   obreiroSince?: string;
   obreiroRole?: string;
+  dataApresentacao?: string;
+  dataCasamento?: string;
+  conjugeName?: string;
+  mae?: string;
+  pai?: string;
 }
 
 export interface Celula {

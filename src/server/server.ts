@@ -12,6 +12,7 @@ import { chatRoutes } from "./modules/chat/chat.routes";
 import { userRoutes } from "./modules/users/users.routes";
 import { documentRoutes } from "./modules/documents/documents.routes";
 import certificatesRoutes from "./modules/certificates/certificates.routes";
+import certificateTemplatesRoutes from "./modules/certificate-templates/certificate-templates.routes";
 import { createCrudRouter } from "./modules/_crud";
 import billingRoutes from "./modules/asaas/billing.routes";
 import asaasWebhookRouter from "./modules/asaas/asaas.webhook";
@@ -121,6 +122,7 @@ async function startServer() {
   app.use("/api/users", userRoutes);
   app.use("/api/documents", documentRoutes);
   app.use("/api/certificates", certificatesRoutes);
+  app.use("/api/certificate-templates", certificateTemplatesRoutes);
 
   // ==========================================
   // Uploads — arquivos protegidos por auth + tenant check

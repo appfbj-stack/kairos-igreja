@@ -151,6 +151,11 @@ function AppInner() {
         baptizedBy: m.baptizedBy ?? null,
         obreiroSince: m.obreiroSince ? String(m.obreiroSince).split('T')[0] : null,
         obreiroRole: m.obreiroRole ?? null,
+        dataApresentacao: m.dataApresentacao ? String(m.dataApresentacao).split('T')[0] : null,
+        dataCasamento: m.dataCasamento ? String(m.dataCasamento).split('T')[0] : null,
+        conjugeName: m.conjugeName ?? null,
+        mae: m.mae ?? null,
+        pai: m.pai ?? null,
       });
 
       const toCelula = (c: any): Celula => ({

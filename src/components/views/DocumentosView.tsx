@@ -11,11 +11,11 @@
  * Cada um pode estar atrelado a um membro (certidão de batismo, obreiro, crachá) ou solto.
  */
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   FileText, Upload, Search, Filter, Trash2, Download, ExternalLink,
   File, Image as ImageIcon, User, Calendar, X, AlertCircle, Sparkles,
-  Edit2, Award, Printer, Save,
+  Edit2, Award, Printer, Save, FolderOpen, FilePlus,
 } from 'lucide-react';
 import { KairosDocument, DocumentType, Member } from '../../types';
 import { dataService } from '../../services/dataService';
@@ -33,6 +33,8 @@ interface DocumentosViewProps {
 const TYPE_LABEL: Record<DocumentType, string> = {
   BATISMO: 'Certidão de Batismo',
   OBREIRO: 'Certidão de Obreiro',
+  APRESENTACAO: 'Apresentação de Criança',
+  CASAMENTO: 'Certidão de Casamento',
   CRACHA: 'Crachá',
   EQUIPAMENTO: 'Equipamento (manual, NF)',
   OUTRO: 'Outro',
@@ -41,6 +43,8 @@ const TYPE_LABEL: Record<DocumentType, string> = {
 const TYPE_COLOR: Record<DocumentType, string> = {
   BATISMO: 'bg-emerald-100 text-emerald-700 border-emerald-300',
   OBREIRO: 'bg-purple-100 text-purple-700 border-purple-300',
+  APRESENTACAO: 'bg-pink-100 text-pink-700 border-pink-300',
+  CASAMENTO: 'bg-rose-100 text-rose-700 border-rose-300',
   CRACHA: 'bg-amber-100 text-amber-700 border-amber-300',
   EQUIPAMENTO: 'bg-blue-100 text-blue-700 border-blue-300',
   OUTRO: 'bg-slate-100 text-slate-700 border-slate-300',
@@ -49,6 +53,8 @@ const TYPE_COLOR: Record<DocumentType, string> = {
 const TYPE_ICON: Record<DocumentType, React.ElementType> = {
   BATISMO: Sparkles,
   OBREIRO: Sparkles,
+  APRESENTACAO: Sparkles,
+  CASAMENTO: Award,
   CRACHA: User,
   EQUIPAMENTO: FileText,
   OUTRO: File,
@@ -96,8 +102,16 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Certificados (gerar/visualizar)
-  const [certModal, setCertModal] = useState<{ memberId: string; type: 'BATISMO' | 'OBREIRO' } | null>(null);
-  const [certPreview, setCertPreview] = useState<{ member: Member; type: 'BATISMO' | 'OBREIRO'; html: string; saving: boolean } | null>(null);
+  type CertType = 'BATISMO' | 'OBREIRO' | 'APRESENTACAO' | 'CASAMENTO';
+  type CertPattern = 'completo' | 'simplificado' | 'com-versiculo';
+  const [certModal, setCertModal] = useState<{ memberId: string; type: CertType; pattern: CertPattern } | null>(null);
+  const [certPreview, setCertPreview] = useState<{
+    member: Member;
+    type: CertType;
+    pattern: CertPattern;
+    html: string;
+    saving: boolean;
+  } | null>(null);
   const [certSaving, setCertSaving] = useState(false);
   const [certError, setCertError] = useState<string | null>(null);
 
@@ -107,6 +121,9 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
     setToast({ msg, type });
     window.setTimeout(() => setToast(null), 2500);
   };
+
+  // Aba ativa: documentos | templates
+  const [activeTab, setActiveTab] = useState<'documents' | 'templates'>('documents');
 
   // ─────────────────────────────────────────────────────────
   // Filtros
@@ -240,11 +257,12 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
   // ─────────────────────────────────────────────────────────
   const generateCertificate = async (
     member: Member,
-    type: 'BATISMO' | 'OBREIRO',
+    type: CertType,
+    pattern: CertPattern,
     save: boolean
   ): Promise<{ html: string; documentId?: string } | null> => {
     const token = localStorage.getItem('kairos_token');
-    const url = `/api/certificates/preview?memberId=${encodeURIComponent(member.id)}&type=${type}&save=${save}`;
+    const url = `/api/certificates/preview?memberId=${encodeURIComponent(member.id)}&type=${type}&pattern=${pattern}&save=${save}`;
     const res = await fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
@@ -259,13 +277,13 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
     return { html: await res.text() };
   };
 
-  const openCertificatePreview = async (member: Member, type: 'BATISMO' | 'OBREIRO') => {
+  const openCertificatePreview = async (member: Member, type: CertType, pattern: CertPattern) => {
     setCertError(null);
-    setCertPreview({ member, type, html: '', saving: true });
+    setCertPreview({ member, type, pattern, html: '', saving: true });
     try {
-      const result = await generateCertificate(member, type, false);
+      const result = await generateCertificate(member, type, pattern, false);
       if (result) {
-        setCertPreview({ member, type, html: result.html, saving: false });
+        setCertPreview({ member, type, pattern, html: result.html, saving: false });
       }
     } catch (e: any) {
       setCertError(e.message || 'Erro ao gerar certificado');
@@ -278,7 +296,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
     setCertSaving(true);
     setCertError(null);
     try {
-      const result = await generateCertificate(certPreview.member, certPreview.type, true);
+      const result = await generateCertificate(certPreview.member, certPreview.type, certPreview.pattern, true);
       if (result) {
         showToast('Certificado salvo no acervo', 'success');
         await onReload();
@@ -286,6 +304,35 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
       }
     } catch (e: any) {
       setCertError(e.message || 'Erro ao salvar');
+    } finally {
+      setCertSaving(false);
+    }
+  };
+
+  const saveEditedCertificate = async (editedHtml: string) => {
+    if (!certPreview) return;
+    setCertSaving(true);
+    setCertError(null);
+    try {
+      const token = localStorage.getItem('kairos_token');
+      const res = await fetch('/api/certificates/save-edited', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          memberId: certPreview.member.id,
+          type: certPreview.type,
+          html: editedHtml,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
+      showToast('Edição salva no acervo', 'success');
+      await onReload();
+    } catch (e: any) {
+      setCertError(e.message || 'Erro ao salvar edição');
     } finally {
       setCertSaving(false);
     }
@@ -325,8 +372,8 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
       showToast('Membro não encontrado para reimprimir', 'error');
       return;
     }
-    const type = doc.type as 'BATISMO' | 'OBREIRO';
-    await openCertificatePreview(member, type);
+    const type = doc.type as CertType;
+    await openCertificatePreview(member, type, 'completo');
   };
 
   return (
@@ -345,7 +392,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setCertModal({ memberId: '', type: 'BATISMO' })}
+              onClick={() => setCertModal({ memberId: '', type: 'BATISMO', pattern: 'completo' })}
               className="flex items-center gap-2 px-5 py-2.5 bg-[#a68a64] hover:bg-[#8a7350] text-white rounded-2xl text-sm font-bold shadow-md"
               title="Gerar certidão de batismo ou certificado de obreiro"
             >
@@ -360,6 +407,32 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
               Upload de Documento
             </button>
           </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-1 mt-4 border-b border-[#e8e4d8] -mb-5 pb-0">
+          <button
+            onClick={() => setActiveTab('documents')}
+            className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${
+              activeTab === 'documents'
+                ? 'border-[#a68a64] text-[#a68a64]'
+                : 'border-transparent text-[#7a7060] hover:text-[#5a5a40]'
+            }`}
+          >
+            <FileText className="w-4 h-4 inline-block mr-1.5" />
+            Documentos
+          </button>
+          <button
+            onClick={() => setActiveTab('templates')}
+            className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${
+              activeTab === 'templates'
+                ? 'border-[#a68a64] text-[#a68a64]'
+                : 'border-transparent text-[#7a7060] hover:text-[#5a5a40]'
+            }`}
+          >
+            <FolderOpen className="w-4 h-4 inline-block mr-1.5" />
+            Modelos Prontos
+          </button>
         </div>
 
         {/* Stats */}
@@ -426,30 +499,34 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
 
       {/* Lista */}
       <div className="flex-1 overflow-y-auto p-6">
-        {filtered.length === 0 ? (
-          <div className="bg-white rounded-2xl border-2 border-dashed border-[#e8e4d8] p-12 text-center">
-            <FileText className="w-12 h-12 text-[#a68a64] mx-auto mb-3 opacity-50" />
-            <h3 className="text-lg font-serif font-bold text-[#2a2a20] mb-1">Nenhum documento</h3>
-            <p className="text-sm text-[#7a7060] mb-5">Faça upload do primeiro certificado ou manual.</p>
-            <button
-              onClick={() => { resetUpload(); setIsUploadOpen(true); }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#5a5a40] hover:bg-[#4d4d36] text-white rounded-2xl text-sm font-bold shadow-md"
-            >
-              <Upload className="w-4 h-4" />
-              Fazer Upload
-            </button>
-          </div>
+        {activeTab === 'documents' ? (
+          filtered.length === 0 ? (
+            <div className="bg-white rounded-2xl border-2 border-dashed border-[#e8e4d8] p-12 text-center">
+              <FileText className="w-12 h-12 text-[#a68a64] mx-auto mb-3 opacity-50" />
+              <h3 className="text-lg font-serif font-bold text-[#2a2a20] mb-1">Nenhum documento</h3>
+              <p className="text-sm text-[#7a7060] mb-5">Faça upload do primeiro certificado ou manual.</p>
+              <button
+                onClick={() => { resetUpload(); setIsUploadOpen(true); }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#5a5a40] hover:bg-[#4d4d36] text-white rounded-2xl text-sm font-bold shadow-md"
+              >
+                <Upload className="w-4 h-4" />
+                Fazer Upload
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filtered.map((d) => (
+                <DocumentCard
+                  key={d.id}
+                  doc={d}
+                  onDelete={() => setDeleteConfirm(d)}
+                  onEdit={() => openEdit(d)}
+                />
+              ))}
+            </div>
+          )
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.map((d) => (
-              <DocumentCard
-                key={d.id}
-                doc={d}
-                onDelete={() => setDeleteConfirm(d)}
-                onEdit={() => openEdit(d)}
-              />
-            ))}
-          </div>
+          <TemplatesView showToast={showToast} />
         )}
       </div>
 
@@ -539,32 +616,35 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
         </div>
       )}
 
-      {/* Cert Modal - escolha de membro + tipo */}
+      {/* Cert Modal - escolha de membro + tipo + padrão */}
       {certModal && (
         <CertModal
           memberId={certModal.memberId}
           type={certModal.type}
+          pattern={certModal.pattern}
           members={members}
           onClose={() => { setCertModal(null); setCertError(null); }}
           onChange={(patch) => setCertModal((m) => m ? { ...m, ...patch } : m)}
-          onSubmit={async (m, t) => {
+          onSubmit={async (m, t, p) => {
             setCertModal(null);
-            await openCertificatePreview(m, t);
+            await openCertificatePreview(m, t, p);
           }}
           error={certError}
         />
       )}
 
-      {/* Cert Preview - mostra HTML pronto para imprimir/salvar */}
+      {/* Cert Preview - mostra HTML pronto para imprimir/salvar/editar */}
       {certPreview && (
         <CertPreviewModal
           member={certPreview.member}
           type={certPreview.type}
+          pattern={certPreview.pattern}
           html={certPreview.html}
           saving={certPreview.saving || certSaving}
           onClose={() => { setCertPreview(null); setCertError(null); }}
           onPrint={printCertificate}
           onSave={saveCertificate}
+          onSaveEdited={saveEditedCertificate}
           error={certError}
         />
       )}
@@ -573,37 +653,59 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
 };
 
 // ═══════════════════════════════════════════════════════════
-// Cert Modal — escolha de membro e tipo
+// Cert Modal — escolha de membro, tipo e padrão
 // ═══════════════════════════════════════════════════════════
 const CertModal: React.FC<{
   memberId: string;
-  type: 'BATISMO' | 'OBREIRO';
+  type: CertType;
+  pattern: CertPattern;
   members: Member[];
   onClose: () => void;
-  onChange: (patch: Partial<{ memberId: string; type: 'BATISMO' | 'OBREIRO' }>) => void;
-  onSubmit: (member: Member, type: 'BATISMO' | 'OBREIRO') => void;
+  onChange: (patch: Partial<{ memberId: string; type: CertType; pattern: CertPattern }>) => void;
+  onSubmit: (member: Member, type: CertType, pattern: CertPattern) => void;
   error: string | null;
-}> = ({ memberId, type, members, onClose, onChange, onSubmit, error }) => {
+}> = ({ memberId, type, pattern, members, onClose, onChange, onSubmit, error }) => {
   const selected = members.find((m) => m.id === memberId);
   const isValid = !!selected && (
-    (type === 'BATISMO' && (selected.baptismDate || selected.baptized)) ||
-    type === 'OBREIRO'
+    (type === 'BATISMO' && !!selected.baptismDate) ||
+    (type === 'OBREIRO' && (!!selected.obreiroSince || !!selected.obreiroRole)) ||
+    (type === 'APRESENTACAO' && !!selected.dataApresentacao) ||
+    (type === 'CASAMENTO' && !!selected.dataCasamento && !!selected.conjugeName)
   );
 
   const helper = (() => {
     if (!selected) return null;
-    if (type === 'BATISMO' && !selected.baptismDate && !selected.baptized) {
+    if (type === 'BATISMO' && !selected.baptismDate) {
       return { kind: 'warn' as const, msg: 'Este membro não tem data de batismo cadastrada. Preencha no cadastro do membro antes de gerar.' };
     }
     if (type === 'OBREIRO' && !selected.obreiroSince && !selected.obreiroRole) {
       return { kind: 'warn' as const, msg: 'Este membro não tem dados de obreiro (data/cargo). Preencha no cadastro do membro antes de gerar.' };
     }
+    if (type === 'APRESENTACAO' && !selected.dataApresentacao) {
+      return { kind: 'warn' as const, msg: 'Este membro não tem data de apresentação cadastrada. Preencha no cadastro do membro antes de gerar.' };
+    }
+    if (type === 'CASAMENTO' && (!selected.dataCasamento || !selected.conjugeName)) {
+      return { kind: 'warn' as const, msg: 'Este membro não tem data de casamento e/ou nome do cônjuge cadastrados. Preencha no cadastro do membro antes de gerar.' };
+    }
     return null;
   })();
 
+  const typeOptions: { v: CertType; label: string; icon: React.ReactNode; activeCls: string; idleCls: string; }[] = [
+    { v: 'BATISMO',     label: 'Certidão de Batismo',           icon: <Sparkles className="w-4 h-4 inline-block mr-1" />, activeCls: 'bg-emerald-50 border-emerald-400 text-emerald-800', idleCls: 'hover:border-emerald-300' },
+    { v: 'OBREIRO',     label: 'Certificado de Obreiro',        icon: <Award    className="w-4 h-4 inline-block mr-1" />, activeCls: 'bg-purple-50  border-purple-400  text-purple-800',  idleCls: 'hover:border-purple-300' },
+    { v: 'APRESENTACAO', label: 'Apresentação de Criança',      icon: <Sparkles className="w-4 h-4 inline-block mr-1" />, activeCls: 'bg-pink-50   border-pink-400    text-pink-800',    idleCls: 'hover:border-pink-300' },
+    { v: 'CASAMENTO',   label: 'Certidão de Casamento',         icon: <Award    className="w-4 h-4 inline-block mr-1" />, activeCls: 'bg-rose-50   border-rose-400    text-rose-800',    idleCls: 'hover:border-rose-300' },
+  ];
+
+  const patternOptions: { v: CertPattern; label: string; sub: string; }[] = [
+    { v: 'completo',      label: 'Completo',      sub: 'Borda + cruz' },
+    { v: 'simplificado',  label: 'Simplificado',  sub: 'Limpo, sem-serif' },
+    { v: 'com-versiculo', label: 'Com Versículo', sub: 'Bíblia no rodapé' },
+  ];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2a2a20]/60 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         <div className="px-6 py-5 border-b border-[#e8e4d8] flex items-center justify-between">
           <h2 className="text-lg font-serif font-bold text-[#2a2a20] flex items-center gap-2">
             <Award className="w-5 h-5 text-[#a68a64]" />
@@ -614,7 +716,7 @@ const CertModal: React.FC<{
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto">
           {error && (
             <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center gap-2">
               <AlertCircle className="w-4 h-4" /> {error}
@@ -624,30 +726,42 @@ const CertModal: React.FC<{
           <div>
             <label className="block text-xs font-extrabold tracking-widest text-[#7a7060] uppercase mb-1.5">Tipo de certificado *</label>
             <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => onChange({ type: 'BATISMO' })}
-                className={`px-4 py-3 rounded-2xl border-2 text-sm font-bold transition-colors ${
-                  type === 'BATISMO'
-                    ? 'bg-emerald-50 border-emerald-400 text-emerald-800'
-                    : 'bg-white border-[#e8e4d8] text-[#5a5a40] hover:border-emerald-300'
-                }`}
-              >
-                <Sparkles className="w-4 h-4 inline-block mr-1" />
-                Certidão de Batismo
-              </button>
-              <button
-                type="button"
-                onClick={() => onChange({ type: 'OBREIRO' })}
-                className={`px-4 py-3 rounded-2xl border-2 text-sm font-bold transition-colors ${
-                  type === 'OBREIRO'
-                    ? 'bg-purple-50 border-purple-400 text-purple-800'
-                    : 'bg-white border-[#e8e4d8] text-[#5a5a40] hover:border-purple-300'
-                }`}
-              >
-                <Award className="w-4 h-4 inline-block mr-1" />
-                Certificado de Obreiro
-              </button>
+              {typeOptions.map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => onChange({ type: opt.v })}
+                  className={`px-3 py-3 rounded-2xl border-2 text-xs font-bold transition-colors ${
+                    type === opt.v
+                      ? `${opt.activeCls}`
+                      : `bg-white border-[#e8e4d8] text-[#5a5a40] ${opt.idleCls}`
+                  }`}
+                >
+                  {opt.icon}
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-extrabold tracking-widest text-[#7a7060] uppercase mb-1.5">Padrão visual *</label>
+            <div className="grid grid-cols-3 gap-2">
+              {patternOptions.map((p) => (
+                <button
+                  key={p.v}
+                  type="button"
+                  onClick={() => onChange({ pattern: p.v })}
+                  className={`px-2 py-2.5 rounded-2xl border-2 text-center transition-colors ${
+                    pattern === p.v
+                      ? 'bg-amber-50 border-amber-400 text-amber-800'
+                      : 'bg-white border-[#e8e4d8] text-[#5a5a40] hover:border-amber-300'
+                  }`}
+                >
+                  <div className="text-xs font-bold leading-tight">{p.label}</div>
+                  <div className="text-[10px] opacity-70 mt-0.5">{p.sub}</div>
+                </button>
+              ))}
             </div>
           </div>
 
@@ -692,6 +806,22 @@ const CertModal: React.FC<{
                   <p><strong>Função:</strong> {selected.obreiroRole || '—'}</p>
                 </>
               )}
+              {type === 'APRESENTACAO' && (
+                <>
+                  <p><strong>Data da apresentação:</strong> {selected.dataApresentacao
+                    ? new Date(selected.dataApresentacao).toLocaleDateString('pt-BR')
+                    : '—'}</p>
+                  <p><strong>Pai:</strong> {selected.pai || '—'} · <strong>Mãe:</strong> {selected.mae || '—'}</p>
+                </>
+              )}
+              {type === 'CASAMENTO' && (
+                <>
+                  <p><strong>Data do casamento:</strong> {selected.dataCasamento
+                    ? new Date(selected.dataCasamento).toLocaleDateString('pt-BR')
+                    : '—'}</p>
+                  <p><strong>Cônjuge:</strong> {selected.conjugeName || '—'}</p>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -706,7 +836,7 @@ const CertModal: React.FC<{
           </button>
           <button
             type="button"
-            onClick={() => selected && onSubmit(selected, type)}
+            onClick={() => selected && onSubmit(selected, type, pattern)}
             disabled={!isValid}
             className="flex-1 px-4 py-2.5 rounded-2xl bg-[#a68a64] hover:bg-[#8a7350] text-white text-sm font-bold shadow-md disabled:opacity-50"
           >
@@ -723,29 +853,61 @@ const CertModal: React.FC<{
 // ═══════════════════════════════════════════════════════════
 const CertPreviewModal: React.FC<{
   member: Member;
-  type: 'BATISMO' | 'OBREIRO';
+  type: CertType;
+  pattern: CertPattern;
   html: string;
   saving: boolean;
   onClose: () => void;
   onPrint: () => void;
   onSave: () => void;
+  onSaveEdited: (html: string) => void;
   error: string | null;
-}> = ({ member, type, html, saving, onClose, onPrint, onSave, error }) => {
+}> = ({ member, type, pattern, html, saving, onClose, onPrint, onSave, onSaveEdited, error }) => {
+  const iframeRef = React.useRef<HTMLIFrameElement>(null);
+
+  const titleByType: Record<CertType, string> = {
+    BATISMO: 'Certidão de Batismo',
+    OBREIRO: 'Certificado de Obreiro',
+    APRESENTACAO: 'Apresentação de Criança',
+    CASAMENTO: 'Certidão de Casamento',
+  };
+  const iconColorByType: Record<CertType, string> = {
+    BATISMO: 'text-emerald-600',
+    OBREIRO: 'text-purple-600',
+    APRESENTACAO: 'text-pink-600',
+    CASAMENTO: 'text-rose-600',
+  };
+  const patternLabel: Record<CertPattern, string> = {
+    completo: 'Padrão Completo',
+    simplificado: 'Padrão Simplificado',
+    'com-versiculo': 'Padrão com Versículo',
+  };
+
+  const handleSaveEdited = () => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const doc = iframe.contentDocument;
+    if (!doc) return;
+    // Serializa o HTML completo (com todos os campos editáveis editados)
+    const fullHtml = '<!DOCTYPE html><html>' + doc.documentElement.innerHTML + '</html>';
+    onSaveEdited(fullHtml);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2a2a20]/70 backdrop-blur-sm">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl h-[92vh] overflow-hidden flex flex-col">
         <div className="px-6 py-4 border-b border-[#e8e4d8] flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-lg font-serif font-bold text-[#2a2a20] flex items-center gap-2">
-              {type === 'BATISMO' ? (
-                <Sparkles className="w-5 h-5 text-emerald-600" />
+              {type === 'APRESENTACAO' || type === 'BATISMO' ? (
+                <Sparkles className={`w-5 h-5 ${iconColorByType[type]}`} />
               ) : (
-                <Award className="w-5 h-5 text-purple-600" />
+                <Award className={`w-5 h-5 ${iconColorByType[type]}`} />
               )}
-              {type === 'BATISMO' ? 'Certidão de Batismo' : 'Certificado de Obreiro'}
+              {titleByType[type]}
             </h2>
             <p className="text-xs text-[#7a7060]">
-              {member.name} · Preview de impressão
+              {member.name} · {patternLabel[pattern]} · Clique nos campos para editar
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -756,16 +918,25 @@ const CertPreviewModal: React.FC<{
               title="Abrir em nova janela pronto para imprimir ou salvar como PDF"
             >
               <Printer className="w-4 h-4" />
-              Imprimir / Salvar PDF
+              Imprimir / PDF
+            </button>
+            <button
+              onClick={handleSaveEdited}
+              disabled={!html || saving}
+              className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold shadow-md disabled:opacity-50"
+              title="Salvar este certificado com as edições inline feitas no preview"
+            >
+              <Edit2 className="w-4 h-4" />
+              {saving ? 'Salvando...' : 'Salvar Edição'}
             </button>
             <button
               onClick={onSave}
               disabled={!html || saving}
               className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-md disabled:opacity-50"
-              title="Salvar no acervo de Documentos para reimprimir depois"
+              title="Salvar no acervo de Documentos (versão original) para reimprimir depois"
             >
               <Save className="w-4 h-4" />
-              {saving ? 'Salvando...' : 'Salvar no Acervo'}
+              Salvar no Acervo
             </button>
             <button
               onClick={onClose}
@@ -786,6 +957,7 @@ const CertPreviewModal: React.FC<{
         <div className="flex-1 bg-[#e8e4d8] p-3 overflow-hidden">
           {html ? (
             <iframe
+              ref={iframeRef}
               title="Certificado"
               srcDoc={html}
               className="w-full h-full bg-white rounded-2xl shadow-md border border-[#d4ccb0]"
@@ -1182,6 +1354,361 @@ const EditDocumentModal: React.FC<{
             className="flex-1 px-4 py-2.5 rounded-2xl bg-[#5a5a40] hover:bg-[#4d4d36] text-white text-sm font-bold shadow-md disabled:opacity-50"
           >
             {saving ? 'Salvando...' : 'Salvar alterações'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════
+// TemplatesView — Modelos Prontos
+// ═══════════════════════════════════════════════════════════
+
+interface CertificateTemplate {
+  filename: string;
+  type: 'BATISMO' | 'OBREIRO' | 'APRESENTACAO' | 'CASAMENTO' | 'GERAL';
+  originalName: string;
+  ext: string;
+  size: number;
+  url: string;
+  createdAt: string;
+}
+
+const TEMPLATE_TYPE_LABEL: Record<CertificateTemplate['type'], string> = {
+  BATISMO: 'Certidão de Batismo',
+  OBREIRO: 'Certificado de Obreiro',
+  APRESENTACAO: 'Apresentação de Criança',
+  CASAMENTO: 'Certidão de Casamento',
+  GERAL: 'Geral',
+};
+
+const TEMPLATE_TYPE_COLOR: Record<CertificateTemplate['type'], string> = {
+  BATISMO: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+  OBREIRO: 'bg-purple-100 text-purple-700 border-purple-300',
+  APRESENTACAO: 'bg-pink-100 text-pink-700 border-pink-300',
+  CASAMENTO: 'bg-rose-100 text-rose-700 border-rose-300',
+  GERAL: 'bg-slate-100 text-slate-700 border-slate-300',
+};
+
+const TemplatesView: React.FC<{ showToast: (msg: string, type?: 'success' | 'error') => void }> = ({ showToast }) => {
+  const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'all' | CertificateTemplate['type']>('all');
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<CertificateTemplate | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadType, setUploadType] = useState<'BATISMO' | 'OBREIRO' | 'APRESENTACAO' | 'CASAMENTO' | 'GERAL'>('GERAL');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('kairos_token');
+      const res = await fetch('/api/certificate-templates', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
+      setTemplates(json.templates);
+    } catch (e: any) {
+      showToast(e.message || 'Erro ao listar modelos', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  const filtered = filter === 'all' ? templates : templates.filter((t) => t.type === filter);
+
+  const submitUpload = async () => {
+    if (!uploadFile) { setUploadError('Selecione um arquivo'); return; }
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', uploadFile);
+      fd.append('type', uploadType);
+      const token = localStorage.getItem('kairos_token');
+      const res = await fetch('/api/certificate-templates/upload', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
+      showToast('Modelo salvo', 'success');
+      setUploadOpen(false);
+      setUploadFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      await load();
+    } catch (e: any) {
+      setUploadError(e.message || 'Erro ao enviar');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDelete = async (t: CertificateTemplate) => {
+    try {
+      const token = localStorage.getItem('kairos_token');
+      const res = await fetch(`/api/certificate-templates/${encodeURIComponent(t.filename)}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
+      setDeleteConfirm(null);
+      showToast('Modelo removido', 'success');
+      await load();
+    } catch (e: any) {
+      showToast(e.message || 'Erro ao remover', 'error');
+    }
+  };
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: templates.length };
+    templates.forEach((t) => { c[t.type] = (c[t.type] || 0) + 1; });
+    return c;
+  }, [templates]);
+
+  return (
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setFilter('all')}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold border ${
+              filter === 'all'
+                ? 'bg-[#a68a64] text-white border-[#a68a64]'
+                : 'bg-white text-[#5a5a40] border-[#e8e4d8] hover:border-[#a68a64]'
+            }`}
+          >
+            Todos ({counts.all || 0})
+          </button>
+          {(['BATISMO', 'OBREIRO', 'APRESENTACAO', 'CASAMENTO'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setFilter(t)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold border ${
+                filter === t
+                  ? `${TEMPLATE_TYPE_COLOR[t]}`
+                  : 'bg-white text-[#5a5a40] border-[#e8e4d8] hover:border-[#a68a64]'
+              }`}
+            >
+              {TEMPLATE_TYPE_LABEL[t]} ({counts[t] || 0})
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => { setUploadOpen(true); setUploadError(null); }}
+          className="flex items-center gap-2 px-5 py-2.5 bg-[#a68a64] hover:bg-[#8a7350] text-white rounded-2xl text-sm font-bold shadow-md"
+        >
+          <FilePlus className="w-4 h-4" />
+          Subir Modelo
+        </button>
+      </div>
+
+      {/* Grid */}
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-[#e8e4d8] p-12 text-center text-sm text-[#7a7060]">
+          <div className="w-5 h-5 mx-auto border-2 border-[#a68a64] border-t-transparent rounded-full animate-spin mb-2" />
+          Carregando modelos...
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl border-2 border-dashed border-[#e8e4d8] p-12 text-center">
+          <FolderOpen className="w-12 h-12 text-[#a68a64] mx-auto mb-3 opacity-50" />
+          <h3 className="text-lg font-serif font-bold text-[#2a2a20] mb-1">Nenhum modelo pronto</h3>
+          <p className="text-sm text-[#7a7060] mb-5 max-w-md mx-auto">
+            Suba aqui modelos de certificados que você já tem prontos (PDF, HTML, JPG ou PNG).
+            Eles ficam guardados pra baixar quando precisar.
+          </p>
+          <button
+            onClick={() => { setUploadOpen(true); setUploadError(null); }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#a68a64] hover:bg-[#8a7350] text-white rounded-2xl text-sm font-bold shadow-md"
+          >
+            <FilePlus className="w-4 h-4" />
+            Subir primeiro modelo
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map((t) => (
+            <TemplateCard
+              key={t.filename}
+              t={t}
+              onDelete={() => setDeleteConfirm(t)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Upload modal */}
+      {uploadOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2a2a20]/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="px-6 py-5 border-b border-[#e8e4d8] flex items-center justify-between">
+              <h2 className="text-lg font-serif font-bold text-[#2a2a20] flex items-center gap-2">
+                <FilePlus className="w-5 h-5 text-[#a68a64]" />
+                Subir Modelo Pronto
+              </h2>
+              <button onClick={() => { setUploadOpen(false); setUploadFile(null); setUploadError(null); }} className="p-1.5 rounded-lg hover:bg-[#f5f0e0] text-[#7a7060]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {uploadError && (
+                <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" /> {uploadError}
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-extrabold tracking-widest text-[#7a7060] uppercase mb-1.5">Tipo do modelo *</label>
+                <select
+                  value={uploadType}
+                  onChange={(e) => setUploadType(e.target.value as any)}
+                  className="w-full px-4 py-2.5 rounded-2xl border border-[#e8e4d8] text-sm focus:border-[#a68a64] outline-none"
+                >
+                  <option value="GERAL">Geral (sem tipo específico)</option>
+                  <option value="BATISMO">Certidão de Batismo</option>
+                  <option value="OBREIRO">Certificado de Obreiro</option>
+                  <option value="APRESENTACAO">Apresentação de Criança</option>
+                  <option value="CASAMENTO">Certidão de Casamento</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-extrabold tracking-widest text-[#7a7060] uppercase mb-1.5">Arquivo (PDF, HTML, JPG, PNG · até 20 MB) *</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.html,.htm,.jpg,.jpeg,.png,application/pdf,text/html,image/jpeg,image/png"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  className="w-full text-sm text-[#2a2a20] file:mr-3 file:px-3 file:py-2 file:rounded-xl file:border-0 file:bg-[#a68a64] file:text-white file:font-bold file:cursor-pointer"
+                />
+                {uploadFile && (
+                  <p className="text-xs text-[#5a5a40] mt-2">
+                    {uploadFile.name} · {formatBytes(uploadFile.size)}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-[#e8e4d8] flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setUploadOpen(false); setUploadFile(null); setUploadError(null); }}
+                className="flex-1 px-4 py-2.5 rounded-2xl bg-[#f5f0e0] text-[#5a5a40] text-sm font-bold hover:bg-[#e8e0c8]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={submitUpload}
+                disabled={!uploadFile || uploading}
+                className="flex-1 px-4 py-2.5 rounded-2xl bg-[#a68a64] hover:bg-[#8a7350] text-white text-sm font-bold shadow-md disabled:opacity-50"
+              >
+                {uploading ? 'Enviando...' : 'Subir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#2a2a20]/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-lg font-serif font-bold text-[#2a2a20] flex items-center gap-2 mb-3">
+              <AlertCircle className="w-5 h-5 text-rose-500" />
+              Remover modelo?
+            </h2>
+            <p className="text-sm text-[#5a5a40] mb-1">
+              <strong>{deleteConfirm.originalName}</strong>
+            </p>
+            <p className="text-xs text-[#7a7060] mb-5">
+              O arquivo será removido permanentemente.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteConfirm(null)} className="flex-1 px-4 py-2.5 rounded-2xl bg-[#f5f0e0] text-[#5a5a40] text-sm font-bold hover:bg-[#e8e0c8]">
+                Cancelar
+              </button>
+              <button onClick={() => handleDelete(deleteConfirm)} className="flex-1 px-4 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold shadow-md">
+                Remover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TemplateCard: React.FC<{ t: CertificateTemplate; onDelete: () => void }> = ({ t, onDelete }) => {
+  const isImg = /\.(jpe?g|png)$/i.test(t.ext);
+  const isPdf = /\.pdf$/i.test(t.ext);
+  const isHtml = /\.html?$/i.test(t.ext);
+  return (
+    <div className="bg-white rounded-2xl border border-[#e8e4d8] shadow-sm hover:shadow-md transition-shadow group flex gap-3 p-3">
+      <a
+        href={t.url}
+        target="_blank"
+        rel="noreferrer"
+        className="shrink-0 w-16 h-16 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 relative overflow-hidden flex items-center justify-center"
+        title="Abrir modelo"
+      >
+        {isImg ? (
+          <img src={t.url} alt={t.originalName} className="w-full h-full object-cover" />
+        ) : isPdf ? (
+          <FileText className="w-7 h-7 text-rose-500" />
+        ) : isHtml ? (
+          <FileText className="w-7 h-7 text-amber-600" />
+        ) : (
+          <File className="w-7 h-7 text-[#a68a64]" />
+        )}
+      </a>
+      <div className="flex-1 min-w-0 flex flex-col">
+        <div className="flex items-start gap-2">
+          <span className={`shrink-0 px-2 py-0.5 rounded-full border text-[9px] font-extrabold tracking-wider uppercase ${TEMPLATE_TYPE_COLOR[t.type]}`}>
+            {TEMPLATE_TYPE_LABEL[t.type]}
+          </span>
+          <h3 className="font-bold text-sm text-[#2a2a20] truncate flex-1" title={t.originalName}>{t.originalName}</h3>
+        </div>
+        <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[#7a7060]">
+          <span className="uppercase font-bold">{t.ext.replace('.', '')}</span>
+          <span>·</span>
+          <span>{formatBytes(t.size)}</span>
+        </div>
+        <div className="text-[10px] text-[#7a7060] flex items-center gap-1 mt-0.5">
+          <Calendar className="w-2.5 h-2.5" /> {new Date(t.createdAt).toLocaleDateString('pt-BR')}
+        </div>
+        <div className="mt-auto pt-2 flex items-center gap-1">
+          <a
+            href={t.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-[#5a5a40] hover:bg-[#4d4d36] text-white text-[11px] font-bold"
+            title="Abrir modelo"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Abrir
+          </a>
+          <a
+            href={t.url}
+            download={t.originalName}
+            className="p-1 rounded-lg text-[#7a7060] hover:bg-[#f5f0e0] hover:text-[#5a5a40]"
+            title="Baixar"
+          >
+            <Download className="w-3 h-3" />
+          </a>
+          <button
+            onClick={onDelete}
+            className="p-1 rounded-lg text-rose-600 hover:bg-rose-50"
+            title="Excluir"
+          >
+            <Trash2 className="w-3 h-3" />
           </button>
         </div>
       </div>
