@@ -1,10 +1,12 @@
 import React, { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
   const [email, setEmail] = useState("admin@kairos.com");
   const [password, setPassword] = useState("admin123");
+  const [showPassword, setShowPassword] = useState(false);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -45,13 +47,24 @@ export const Login: React.FC = () => {
           </div>
           <div>
             <label className="block text-[10px] font-bold text-[#2a2a20] uppercase mb-1">Senha</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-[#f5f5f0] border border-[#e0e0d0] text-sm text-[#2a2a20] focus:outline-none focus:ring-2 focus:ring-[#5a5a40]/30"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 pr-12 rounded-xl bg-[#f5f5f0] border border-[#e0e0d0] text-sm text-[#2a2a20] focus:outline-none focus:ring-2 focus:ring-[#5a5a40]/30"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((s) => !s)}
+                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg text-[#8a8a70] hover:text-[#2a2a20] hover:bg-[#e0e0d0]/40 transition-colors"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           {err && <p className="text-xs text-red-600 bg-red-50 p-2 rounded-lg">{err}</p>}
