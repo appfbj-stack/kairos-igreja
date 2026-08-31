@@ -17,9 +17,9 @@ import { AuthRequest } from "../types";
 const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
 
 // Regex pra extrair o tenantId do path (uploads do tenant) OU special dirs compartilhados
-const TENANT_PATH_RE = /^\/([0-9a-f-]{36})\/(.+)$/i;
+const TENANT_PATH_RE = /^\/?([0-9a-f-]{36})\/(.+)$/i;
 const SHARED_DIRS = ["certificate-templates"]; // pastas compartilhadas (sem tenantId)
-const SHARED_PATH_RE = /^\/(certificate-templates)\/(.+)$/i;
+const SHARED_PATH_RE = /^\/?(certificate-templates)\/(.+)$/i;
 
 export function secureStaticUploads(req: Request, res: Response, next: NextFunction) {
   // Pega o path removendo o prefixo /uploads
