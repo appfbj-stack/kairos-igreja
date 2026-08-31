@@ -6,7 +6,7 @@
  * mesmo sem internet (depois de carregado pelo menos 1x online).
  */
 
-const CACHE_NAME = "kairos-igreja-v2.8.4";
+const CACHE_NAME = "kairos-igreja-v2.8.5";
 const STATIC_ASSETS = [
   "/",
   "/privacidade",
@@ -25,7 +25,7 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// Activate: limpar caches antigos
+// Activate: limpar TODOS os caches antigos (mesmo de prefixos diferentes)
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
@@ -33,7 +33,7 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((k) => k !== CACHE_NAME && k.startsWith("kairos-igreja-"))
+            .filter((k) => k !== CACHE_NAME)
             .map((k) => caches.delete(k))
         )
       )
@@ -50,24 +50,9 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
 
-  // API: network-first (precisa de dados frescos)
+  // API: SEMPRE network, nunca cache. Bypass completo do SW pra API.
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          // Cachear GETs do billing/privacidade (publicos ou semi-publicos)
-          if (
-            res.ok &&
-            (url.pathname.startsWith("/api/privacidade") ||
-              url.pathname === "/api/health")
-          ) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match(req))
-    );
+    event.respondWith(fetch(req));
     return;
   }
 
