@@ -15,7 +15,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   FileText, Upload, Search, Filter, Trash2, Download, ExternalLink,
   File, Image as ImageIcon, User, Calendar, X, AlertCircle, Sparkles,
-  Edit2, Award, Printer, Save, FolderOpen, FilePlus,
+  Edit2, Award, Printer, Save, FolderOpen, FilePlus, DollarSign,
 } from 'lucide-react';
 import { KairosDocument, DocumentType, Member } from '../../types';
 import { dataService } from '../../services/dataService';
@@ -123,7 +123,7 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
   };
 
   // Aba ativa: documentos | templates
-  const [activeTab, setActiveTab] = useState<'documents' | 'templates'>('documents');
+  const [activeTab, setActiveTab] = useState<'documents' | 'templates' | 'financeiro'>('documents');
 
   // ─────────────────────────────────────────────────────────
   // Filtros
@@ -433,6 +433,17 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
             <FolderOpen className="w-4 h-4 inline-block mr-1.5" />
             Modelos Prontos
           </button>
+          <button
+            onClick={() => setActiveTab('financeiro')}
+            className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${
+              activeTab === 'financeiro'
+                ? 'border-emerald-600 text-emerald-700'
+                : 'border-transparent text-[#7a7060] hover:text-emerald-600'
+            }`}
+          >
+            <DollarSign className="w-4 h-4 inline-block mr-1.5" />
+            Atividades Financeira
+          </button>
         </div>
 
         {/* Stats */}
@@ -525,8 +536,10 @@ export const DocumentosView: React.FC<DocumentosViewProps> = ({
               ))}
             </div>
           )
-        ) : (
+        ) : activeTab === 'templates' ? (
           <TemplatesView showToast={showToast} />
+        ) : (
+          <FinanceiroView />
         )}
       </div>
 
@@ -1731,6 +1744,63 @@ const TemplateCard: React.FC<{ t: CertificateTemplate; onDelete: () => void; sho
           </button>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ============================================================
+// FinanceiroView � Atividades Financeira (Presta��o de Contas)
+// Abre o app PWA hospedado em https://atividades.fbautomacao.space
+// Cada igreja acessa e preenche seu relat�rio no navegador local (IndexedDB).
+// ============================================================
+const FINANCEIRO_URL = 'https://atividades.fbautomacao.space';
+
+const FinanceiroView: React.FC = () => {
+  return (
+    <div className="space-y-4">
+      {/* Banner explicativo */}
+      <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-4 flex items-start gap-3">
+        <DollarSign className="w-6 h-6 text-emerald-700 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-bold text-emerald-800">Atividades Financeira � Presta��o de Contas</h3>
+          <p className="text-xs text-emerald-700 mt-1">
+            Preencha o relat�rio mensal da sua igreja: entradas (d�zimos, ofertas), sa�das, saldos,
+            membros e batismos. Os dados ficam salvos no seu navegador e podem ser exportados como PDF ou Excel.
+          </p>
+          <p className="text-xs text-emerald-700 mt-2">
+            <strong>Dispon�vel para todas as igrejas.</strong> Cada congrega��o abre, preenche e exporta o
+            pr�prio relat�rio. Use o celular ou computador � funciona offline.
+          </p>
+        </div>
+        <a
+          href={FINANCEIRO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-md"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Abrir em nova aba
+        </a>
+      </div>
+
+      {/* Iframe com o app */}
+      <div className="bg-white rounded-2xl border-2 border-emerald-200 overflow-hidden shadow-sm" style={{ height: 'calc(100vh - 320px)', minHeight: 500 }}>
+        <iframe
+          src={FINANCEIRO_URL}
+          title="Atividades Financeira � Presta��o de Contas"
+          className="w-full h-full"
+          allow="clipboard-write; camera; microphone"
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
+        />
+      </div>
+
+      <p className="text-xs text-[#7a7060] text-center">
+        Se o app n�o carregar,{' '}
+        <a href={FINANCEIRO_URL} target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline font-semibold">
+          clique aqui para abrir
+        </a>
+        .
+      </p>
     </div>
   );
 };
