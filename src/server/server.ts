@@ -29,6 +29,12 @@ async function startServer() {
   const PORT = env.PORT;
 
   // ==========================================
+  // Trust proxy — Caddy na frente adiciona X-Forwarded-For
+  // Necessário pro rate-limit não reclamar e pra req.ip funcionar
+  // ==========================================
+  app.set("trust proxy", 1);
+
+  // ==========================================
   // Helmet — headers de segurança HTTP padrão
   // (HSTS, X-Frame-Options, X-Content-Type-Options, etc.)
   // ==========================================
