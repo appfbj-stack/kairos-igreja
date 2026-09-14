@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Building2, MapPin, Phone, User, Users, Home, Clock, Plus, Trash2, ShieldCheck } from 'lucide-react';
 import { Congregation } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface CongregationModalProps {
   isOpen: boolean;
@@ -15,6 +16,9 @@ export const CongregationModal: React.FC<CongregationModalProps> = ({
   onSave,
   initialData,
 }) => {
+  const { user } = useAuth();
+  // Só SUPER_ADMIN pode marcar congregação como sede/matriz
+  const canSetHeadquarters = user?.role === 'SUPER_ADMIN';
   const [name, setName] = useState('');
   const [isHeadquarters, setIsHeadquarters] = useState(false);
   const [leadPastor, setLeadPastor] = useState('');
@@ -70,7 +74,8 @@ export const CongregationModal: React.FC<CongregationModalProps> = ({
     const payload = {
       ...(initialData?.id ? { id: initialData.id } : {}),
       name,
-      isHeadquarters,
+      // Só SUPER_ADMIN envia isHeadquarters (defesa em profundidade)
+      ...(canSetHeadquarters ? { isHeadquarters } : {}),
       leadPastor: leadPastor || 'Pr. Responsável',
       address,
       city: city || 'São Paulo - SP',
@@ -112,27 +117,29 @@ export const CongregationModal: React.FC<CongregationModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs">
-          {/* Is Headquarters Switch */}
-          <div className="p-4 rounded-2xl bg-white border border-[#e0e0d0] flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <ShieldCheck className="w-5 h-5 text-[#a68a64]" />
-              <div>
-                <p className="font-bold text-[#2a2a20]">Matriz / Sede Central</p>
-                <p className="text-[11px] text-[#8a8a70]">
-                  Marque se este campus é a sede principal do ministério
-                </p>
+          {/* Is Headquarters Switch — SÓ SUPER_ADMIN pode ver/marcar */}
+          {canSetHeadquarters && (
+            <div className="p-4 rounded-2xl bg-white border border-[#e0e0d0] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <ShieldCheck className="w-5 h-5 text-[#a68a64]" />
+                <div>
+                  <p className="font-bold text-[#2a2a20]">Matriz / Sede Central</p>
+                  <p className="text-[11px] text-[#8a8a70]">
+                    Marque se este campus é a sede principal do ministério
+                  </p>
+                </div>
               </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isHeadquarters}
+                  onChange={(e) => setIsHeadquarters(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-[#e0e0d0] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#5a5a40]"></div>
+              </label>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isHeadquarters}
-                onChange={(e) => setIsHeadquarters(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-[#e0e0d0] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#5a5a40]"></div>
-            </label>
-          </div>
+          )}
 
           {/* Name & Lead Pastor */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

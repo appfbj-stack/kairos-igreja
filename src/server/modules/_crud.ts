@@ -16,15 +16,35 @@ import { AuthRequest } from "../types";
  *
  * Modelos SEM congregationId (ex: MuralNotice global) funcionam normalmente.
  *
- * @param modelName   Nome do model no Prisma Client (ex: "celula", "member")
- * @param searchFields Campos onde o `?search=` faz "contains" (OR). Vazio = sem busca.
+ * @param modelName        Nome do model no Prisma Client (ex: "celula", "member")
+ * @param searchFields     Campos onde o `?search=` faz "contains" (OR). Vazio = sem busca.
+ * @param superAdminOnlyFields  Campos que SÓ SUPER_ADMIN pode setar (filtra do body pra outros).
  */
 export function createCrudRouter(
   modelName: string,
-  searchFields: string[] = ["name"]
+  searchFields: string[] = ["name"],
+  superAdminOnlyFields: string[] = []
 ) {
   const router = Router();
   router.use(authMiddleware);
+
+  /**
+   * Filtra body removendo campos que só SUPER_ADMIN pode setar.
+   * Defesa em profundidade: mesmo se o frontend esquecer, backend recusa.
+   */
+  const filterPrivilegedFields = (req: AuthRequest): boolean => {
+    if (!req.body || typeof req.body !== "object") return false;
+    const isSuperAdmin = req.user?.role === "SUPER_ADMIN";
+    if (isSuperAdmin) return false; // SUPER_ADMIN passa tudo
+    let filtered = false;
+    for (const field of superAdminOnlyFields) {
+      if (field in req.body) {
+        delete req.body[field];
+        filtered = true;
+      }
+    }
+    return filtered;
+  };
 
   // GET / — list
   router.get(
@@ -107,6 +127,7 @@ export function createCrudRouter(
     asyncHandler(async (req: AuthRequest, res: Response) => {
       const tenantId = req.user!.tenantId;
       const model = (prisma as any)[modelName];
+      filterPrivilegedFields(req); // remove campos de SUPER_ADMIN se user não for
       const { id: _ignore, createdAt: _c, updatedAt: _u, deletedAt: _d, ...cleanData } = req.body || {};
       try {
         const item = await model.create({
@@ -136,6 +157,7 @@ export function createCrudRouter(
     "/:id",
     asyncHandler(async (req: AuthRequest, res: Response) => {
       const scope = getScopeFilter(req);
+      filterPrivilegedFields(req); // remove campos de SUPER_ADMIN se user não for
       const { id: _i, tenantId: _t, createdAt: _c, updatedAt: _u, deletedAt: _d, ...cleanData } = req.body || {};
       const model = (prisma as any)[modelName];
       const where: any = { id: req.params.id, tenantId: scope.tenantId, deletedAt: null };

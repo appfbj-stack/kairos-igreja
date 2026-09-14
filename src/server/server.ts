@@ -142,7 +142,7 @@ async function startServer() {
 
   // Rotas CRUD genéricas (multi-tenant, soft-delete, busca, paginação)
   app.use("/api/celulas", createCrudRouter("celula", ["name", "leaderName"]));
-  app.use("/api/congregations", createCrudRouter("congregation", ["name", "pastorName"]));
+  app.use("/api/congregations", createCrudRouter("congregation", ["name", "pastorName"], ["isHeadquarters"]));
   app.use("/api/ministries", createCrudRouter("ministry", ["name", "leaderName"]));
   app.use("/api/events", createCrudRouter("event", ["title", "location", "type"]));
   app.use("/api/finances", createCrudRouter("financialTransaction", ["description", "category"]));
