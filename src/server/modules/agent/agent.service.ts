@@ -33,7 +33,8 @@ export interface ChatResponse {
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "nex-agi/nex-n2.5-mini:free";
-const MAX_ITERATIONS = 5;
+const MAX_ITERATIONS = 3;
+const FETCH_TIMEOUT_MS = 45_000;
 
 interface Message {
   role: "system" | "user" | "assistant" | "tool";
@@ -123,7 +124,10 @@ export async function processChat(
         "X-Title": "Kairos Igreja Agent",
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
+
+    console.log(`[agent] iter=${iterations} model=${DEFAULT_MODEL} tokens_in≈${messages.length}`);
 
     if (!res.ok) {
       const text = await res.text();
@@ -145,6 +149,7 @@ export async function processChat(
     if (msg.tool_calls && msg.tool_calls.length > 0) {
       const toolCall = msg.tool_calls[0];
       const toolNameSent = toolCall.function.name;
+      console.log(`[agent] tool_call: ${toolNameSent}`);
       // Mapear de volta do sanitized name → name original
       let tool: ToolDefinition | undefined;
       for (const t of tools) {
