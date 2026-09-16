@@ -8,6 +8,7 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { QuickActionModal } from './components/QuickActionModal';
 import { Login } from './components/Login';
+import { SidebarChat } from './components/chat/SidebarChat';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Views
@@ -28,6 +29,9 @@ import { DocumentosView } from './components/views/DocumentosView';
 import { BillingView } from './components/views/BillingView';
 import { SuperAdminView } from './components/views/SuperAdminView';
 import { PrivacyView } from './components/views/PrivacyView';
+import { ObpcAdminView } from './components/views/ObpcAdminView';
+import { ObpcTelaoView } from './components/views/ObpcTelaoView';
+import { ObpcCheckinView } from './components/views/ObpcCheckinView';
 
 import { MemberModal } from './components/MemberModal';
 
@@ -63,8 +67,19 @@ function AppInner() {
   // ==========================================
   // Rota publica /privacidade (LGPD) - nao requer login
   // ==========================================
-  if (typeof window !== 'undefined' && window.location.pathname === '/privacidade') {
-    return <PrivacyView />;
+  if (typeof window !== 'undefined') {
+    const path = window.location.pathname;
+    if (path === '/privacidade') return <PrivacyView />;
+    // OBPC — Painel Telão (público, projetado em TV/Computador)
+    if (path.startsWith('/telao/')) {
+      const token = path.replace('/telao/', '').split('/')[0];
+      return <ObpcTelaoView token={token} />;
+    }
+    // OBPC — Check-in (público, mobile)
+    if (path.startsWith('/checkin/')) {
+      const token = path.replace('/checkin/', '').split('/')[0];
+      return <ObpcCheckinView token={token} />;
+    }
   }
 
   const { user, logout } = useAuth();
@@ -968,6 +983,10 @@ function AppInner() {
             />
           )}
 
+          {currentView === 'obpc' && (user?.role === 'ADMIN' || user?.role === 'GERENTE' || user?.role === 'SUPER_ADMIN') && (
+            <ObpcAdminView />
+          )}
+
           {currentView === 'super-admin' && user?.role === 'SUPER_ADMIN' && (
             <SuperAdminView />
           )}
@@ -999,6 +1018,8 @@ function AppInner() {
         celulas={celulas}
         onOpenBatchImport={() => setCurrentView('membros')}
       />
+
+      <SidebarChat />
     </div>
   );
 }
