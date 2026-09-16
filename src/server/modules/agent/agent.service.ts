@@ -34,7 +34,7 @@ export interface ChatResponse {
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "nex-agi/nex-n2.5-mini:free";
 const MAX_ITERATIONS = 3;
-const FETCH_TIMEOUT_MS = 45_000;
+const FETCH_TIMEOUT_MS = 120_000;
 
 interface Message {
   role: "system" | "user" | "assistant" | "tool";
@@ -127,7 +127,8 @@ export async function processChat(
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
 
-    console.log(`[agent] iter=${iterations} model=${DEFAULT_MODEL} tokens_in≈${messages.length}`);
+    const t0 = Date.now();
+    console.log(`[agent] iter=${iterations} model=${DEFAULT_MODEL} msgs=${messages.length}`);
 
     if (!res.ok) {
       const text = await res.text();
@@ -136,6 +137,8 @@ export async function processChat(
         message: `OpenRouter ${res.status}: ${text.slice(0, 200)}`,
       };
     }
+
+    console.log(`[agent] iter=${iterations} OK in ${Date.now() - t0}ms`);
 
     const data = await res.json();
     const choice = data.choices?.[0];
