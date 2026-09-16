@@ -19,6 +19,9 @@ import asaasWebhookRouter from "./modules/asaas/asaas.webhook";
 import superAdminRoutes from "./modules/super-admin/super-admin.routes";
 import lgpdRoutes from "./modules/lgpd/lgpd.routes";
 import privacidadeRoutes from "./modules/lgpd/privacidade.routes";
+import obpcAdminRoutes from "./modules/obpc/obpc.routes";
+import obpcPublicRoutes from "./modules/obpc/obpc.public.routes";
+import { agentRoutes } from "./modules/agent/agent.routes";
 import { authMiddleware } from "./middleware/auth";
 import { requireActiveSubscription } from "./middleware/subscription";
 import { asaasConfigured, ASAAS_ENV_LABEL } from "./modules/asaas/asaas.service";
@@ -115,6 +118,14 @@ async function startServer() {
   app.use("/api/privacidade", privacidadeRoutes);
 
   // ==========================================
+  // OBPC — Rotas PÚBLICAS (escaneamento QR)
+  // Precisam ficar ANTES do subscription guard para que participantes
+  // consigam fazer check-in mesmo se o tenant estiver em trial/vencido.
+  // Não expõem dados sensíveis — apenas o necessário pro fluxo.
+  // ==========================================
+  app.use("/api/obpc/public", obpcPublicRoutes);
+
+  // ==========================================
   // Subscription guard — bloqueia trial expirado / cancelado
   // (skip automático de /api/auth, /api/billing, /api/asaas/webhook, /api/health)
   // ==========================================
@@ -125,10 +136,17 @@ async function startServer() {
   // ==========================================
   app.use("/api/members", memberRoutes);
   app.use("/api/chat", chatRoutes);
+  app.use("/api/agent", agentRoutes);
   app.use("/api/users", userRoutes);
   app.use("/api/documents", documentRoutes);
   app.use("/api/certificates", certificatesRoutes);
   app.use("/api/certificate-templates", certificateTemplatesRoutes);
+
+  // ==========================================
+  // OBPC — Rotas ADMIN (autenticadas, dentro do tenant)
+  // Eventos, cursos, frequência, SSE
+  // ==========================================
+  app.use("/api/obpc", obpcAdminRoutes);
 
   // ==========================================
   // Uploads — arquivos protegidos por auth + tenant check
