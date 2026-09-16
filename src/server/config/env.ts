@@ -10,5 +10,5 @@ export const env = {
   APP_URL: process.env.APP_URL || "http://localhost:3000",
   BACKUP_DIR: process.env.BACKUP_DIR || "./backups",
   OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || "",
-  OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || "meta-llama/llama-3.1-8b-instruct:free",
+  OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || "nex-agi/nex-n2.5-mini:free",
 } as const;

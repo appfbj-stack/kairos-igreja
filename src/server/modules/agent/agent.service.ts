@@ -32,7 +32,7 @@ export interface ChatResponse {
 }
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "meta-llama/llama-3.1-8b-instruct:free";
+const DEFAULT_MODEL = "nex-agi/nex-n2.5-mini:free";
 const MAX_ITERATIONS = 5;
 
 interface Message {
