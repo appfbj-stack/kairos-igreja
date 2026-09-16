@@ -18,6 +18,7 @@ import {
   FileText,
   CreditCard,
   Shield,
+  QrCode,
 } from 'lucide-react';
 import { ViewMode } from '../types';
 
@@ -60,6 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'congregacoes', label: 'Congregações', icon: Building2 },
     { id: 'ministerios', label: 'Ministérios', icon: Briefcase },
     { id: 'eventos', label: 'Eventos', icon: Calendar },
+    { id: 'obpc', label: 'Presença QR', icon: QrCode, adminOnly: true },
     { id: 'financas', label: 'Finanças', icon: DollarSign },
     { id: 'oracao', label: 'Oração', icon: Flame, badge: prayersCount },
     { id: 'sermoes', label: 'Sermões', icon: BookOpen },
