@@ -37,9 +37,9 @@ export const SidebarChat: React.FC = () => {
       id: 'welcome',
       role: 'agent',
       text:
-        'Olá! 👋 Sou o Kairós, seu assistente pastoral.\n\n' +
-        'Por enquanto tô em modo teste (Sprint 2.1) — sei buscar membros. ' +
-        'Experimente:\n\n• "busca Maria"\n• "tem o João Silva?"\n• "lista membros da Sede"',
+        'Olá! 👋 Sou a Secretaria IA da igreja.\n\n' +
+        'Posso cadastrar, buscar, editar e inativar membros por linguagem natural. ' +
+        'Experimente:\n\n• "cadastra Maria Silva, batismo 15/08, congregação Cajuru"\n• "busca João Silva"\n• "edita o Carlos: mudou telefone para 11999998888"\n• "lista membros da Sede"',
       timestamp: Date.now(),
     },
   ]);
@@ -134,8 +134,8 @@ export const SidebarChat: React.FC = () => {
             <div className="flex items-center gap-2">
               <Sparkles size={20} />
               <div>
-                <h3 className="font-semibold text-sm">Kairós — Assistente Pastoral</h3>
-                <p className="text-xs opacity-80">Sprint 2.1 · modo teste</p>
+                <h3 className="font-semibold text-sm">Secretaria — Cadastro de Membros</h3>
+                <p className="text-xs opacity-80">IA integrada · OpenRouter</p>
               </div>
             </div>
             <button
