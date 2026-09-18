@@ -6,6 +6,25 @@ import { prisma } from "../config/database";
 import { AuthRequest } from "../types";
 
 /**
+ * Cache simples de "model tem congregationId?" pra evitar queries a cada request.
+ * Congelado na criação do router (models do app não mudam em runtime).
+ */
+const congregationIdPresenceCache = new Map<string, boolean>();
+function modelHasCongregationField(modelName: string): boolean {
+  if (congregationIdPresenceCache.has(modelName)) {
+    return congregationIdPresenceCache.get(modelName)!;
+  }
+  const model = (prisma as any)[modelName];
+  if (!model?.fields) {
+    congregationIdPresenceCache.set(modelName, false);
+    return false;
+  }
+  const has = !!model.fields.congregationId;
+  congregationIdPresenceCache.set(modelName, has);
+  return has;
+}
+
+/**
  * Factory de rotas CRUD genéricas com controle de acesso por congregação.
  *
  * Regras:
@@ -54,8 +73,8 @@ export function createCrudRouter(
       const { search, page, limit, orderBy, orderDir } = req.query as Record<string, string | undefined>;
 
       const where: any = { tenantId: scope.tenantId, deletedAt: null };
-      // Filtro de congregação: se user não é admin, aplica
-      if ("congregationId" in scope) {
+      // Filtro de congregação: se user não é admin E o model tem o campo
+      if ("congregationId" in scope && modelHasCongregationField(modelName)) {
         // Mostra items da própria congregação OU itens globais (congregationId null)
         if (scope.congregationId) {
           where.OR = [
@@ -107,7 +126,7 @@ export function createCrudRouter(
       const scope = getScopeFilter(req);
       const model = (prisma as any)[modelName];
       const where: any = { id: req.params.id, tenantId: scope.tenantId, deletedAt: null };
-      if ("congregationId" in scope && scope.congregationId) {
+      if ("congregationId" in scope && scope.congregationId && modelHasCongregationField(modelName)) {
         where.OR = [{ congregationId: scope.congregationId }, { congregationId: null }];
       }
       const item = await model.findFirst({ where });
@@ -161,7 +180,7 @@ export function createCrudRouter(
       const { id: _i, tenantId: _t, createdAt: _c, updatedAt: _u, deletedAt: _d, ...cleanData } = req.body || {};
       const model = (prisma as any)[modelName];
       const where: any = { id: req.params.id, tenantId: scope.tenantId, deletedAt: null };
-      if ("congregationId" in scope && scope.congregationId) {
+      if ("congregationId" in scope && scope.congregationId && modelHasCongregationField(modelName)) {
         where.OR = [{ congregationId: scope.congregationId }, { congregationId: null }];
       }
       try {
@@ -200,7 +219,7 @@ export function createCrudRouter(
       const scope = getScopeFilter(req);
       const model = (prisma as any)[modelName];
       const where: any = { id: req.params.id, tenantId: scope.tenantId, deletedAt: null };
-      if ("congregationId" in scope && scope.congregationId) {
+      if ("congregationId" in scope && scope.congregationId && modelHasCongregationField(modelName)) {
         where.OR = [{ congregationId: scope.congregationId }, { congregationId: null }];
       }
       const result = await model.updateMany({
