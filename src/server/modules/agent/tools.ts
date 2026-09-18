@@ -147,7 +147,8 @@ const cadastrarMembroInput = z.object({
   maritalStatus: z
     .enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"])
     .optional(),
-  congregationId: z.string().uuid().optional(),
+  congregationId: z.string().uuid().optional().describe("UUID da congregação (opcional se passar congregationName)"),
+  congregationName: z.string().optional().describe("Nome (ou parte) da congregação — ex: 'Cajuru', 'Sede'. Faz match fuzzy."),
   filiation: z.string().optional().describe("Nome do pai/mãe"),
   address: z.string().optional(),
   notes: z.string().optional(),
@@ -162,13 +163,40 @@ const cadastrarMembroTool: ToolDefinition = {
   execute: async (input, ctx) => {
     if (ctx.role === "USUARIO") throw new Error("Sem permissão para cadastrar.");
 
-    // Usuário não-admin só pode cadastrar na própria congregação
+    // Resolver congregationId: se vier congregationName (em vez de UUID), fazer lookup fuzzy
     let congregationId = input.congregationId;
+    if (!congregationId && input.congregationName) {
+      const norm = (s: string) =>
+        s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      const target = norm(input.congregationName);
+      const congregations = await prisma.congregation.findMany({
+        where: { tenantId: ctx.tenantId, deletedAt: null },
+        select: { id: true, name: true },
+      });
+      const exact = congregations.find((c) => norm(c.name) === target);
+      const partial = exact ?? congregations.find(
+        (c) => norm(c.name).includes(target) || target.includes(norm(c.name))
+      );
+      if (!partial) {
+        throw new Error(
+          `Congregação "${input.congregationName}" não encontrada. Use 'igreja:listar-congregacoes' para ver as opções.`
+        );
+      }
+      congregationId = partial.id;
+    }
+
+    // Usuário não-admin só pode cadastrar na própria congregação
     if (ctx.role !== "SUPER_ADMIN" && ctx.role !== "ADMIN") {
       if (!ctx.congregationId) {
         throw new Error("Sua conta não tem congregação vinculada.");
       }
       congregationId = ctx.congregationId;
+    }
+
+    if (!congregationId) {
+      throw new Error(
+        "Informe a congregação (UUID via congregationId OU nome via congregationName)."
+      );
     }
 
     const member = await prisma.member.create({
