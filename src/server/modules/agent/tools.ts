@@ -157,8 +157,10 @@ const cadastrarMembroInput = z.object({
 const cadastrarMembroTool: ToolDefinition = {
   name: "igreja:cadastrar-membro",
   description:
-    "Cria um novo membro no sistema. Secretária pode cadastrar na sua própria congregação. Admin/SUPER_ADMIN pode escolher a congregação.",
-  inputSchema: cadastrarMembroInput,
+    "Cria um novo membro no sistema. Secretária pode cadastrar na sua própria congregação. Admin/SUPER_ADMIN pode escolher a congregação. Detecta automaticamente duplicatas por telefone/CPF (a menos que force=true).",
+  inputSchema: cadastrarMembroInput.extend({
+    force: z.boolean().optional().describe("Se true, cadastra mesmo havendo conflito de telefone/CPF (use após o usuário confirmar)."),
+  }),
   destructive: false,
   execute: async (input, ctx) => {
     if (ctx.role === "USUARIO") throw new Error("Sem permissão para cadastrar.");
@@ -199,6 +201,64 @@ const cadastrarMembroTool: ToolDefinition = {
       );
     }
 
+    // ============================================
+    // DETECÇÃO DE DUPLICATA (telefone ou CPF)
+    // Não bloqueia — só retorna o conflito pro LLM decidir.
+    // Se o usuário mandar force=true, cadastra mesmo assim.
+    // ============================================
+    const conflicts: Array<{ field: string; value: string; existing: { id: string; name: string; congregation: string | null } }> = [];
+    if (input.phone) {
+      const normPhone = input.phone.replace(/\D/g, "");
+      if (normPhone.length >= 8) {
+        const existing = await prisma.member.findFirst({
+          where: {
+            tenantId: ctx.tenantId,
+            deletedAt: null,
+            // match aproximado: ultimos 8 digitos (ignora DDI/DDD差异)
+            phone: { contains: normPhone.slice(-8) },
+            NOT: { id: "00000000-0000-0000-0000-000000000000" },
+          },
+          include: { congregation: { select: { name: true } } },
+        });
+        if (existing) {
+          conflicts.push({
+            field: "phone",
+            value: input.phone,
+            existing: { id: existing.id, name: existing.name, congregation: existing.congregation?.name ?? null },
+          });
+        }
+      }
+    }
+    if (input.cpf) {
+      const normCpf = input.cpf.replace(/\D/g, "");
+      if (normCpf.length === 11) {
+        const existing = await prisma.member.findFirst({
+          where: {
+            tenantId: ctx.tenantId,
+            deletedAt: null,
+            cpf: { contains: normCpf },
+          },
+          include: { congregation: { select: { name: true } } },
+        });
+        if (existing) {
+          conflicts.push({
+            field: "cpf",
+            value: input.cpf,
+            existing: { id: existing.id, name: existing.name, congregation: existing.congregation?.name ?? null },
+          });
+        }
+      }
+    }
+
+    if (conflicts.length > 0 && !input.force) {
+      return {
+        ok: false,
+        conflict: true,
+        conflicts,
+        message: `Possível duplicata encontrada. ${conflicts.map((c) => `${c.field}=${c.value} → já é de ${c.existing.name} (${c.existing.congregation ?? "sem congregação"})`).join("; ")}. Pergunte ao usuário se quer cadastrar mesmo assim (force=true).`,
+      };
+    }
+
     const member = await prisma.member.create({
       data: {
         tenantId: ctx.tenantId,
@@ -215,7 +275,12 @@ const cadastrarMembroTool: ToolDefinition = {
         status: "membro",
       },
     });
-    return { ok: true, id: member.id, name: member.name };
+    return {
+      ok: true,
+      id: member.id,
+      name: member.name,
+      ...(conflicts.length > 0 ? { duplicateWarning: `Cadastrado apesar de ${conflicts.length} conflito(s) de duplicata.` } : {}),
+    };
   },
 };
 
