@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { authMiddleware } from "../../middleware/auth";
 import { asyncHandler } from "../../middleware/asyncHandler";
 import { AuthRequest } from "../../types";
-import { MemberRepository } from "../../repositories/MemberRepository";
+import { MemberRepository, ScopeUser } from "../../repositories/MemberRepository";
 
 const router = Router();
 router.use(authMiddleware);
@@ -11,7 +11,11 @@ router.use(authMiddleware);
 router.get(
   "/",
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const repo = new MemberRepository(req.tenantId!);
+    const user: ScopeUser = {
+      role: req.user!.role,
+      congregationId: req.user!.congregationId,
+    };
+    const repo = new MemberRepository(req.tenantId!, user);
     const { search, page, limit } = req.query;
     const result = await repo.findAll(
       search as string,
@@ -26,7 +30,11 @@ router.get(
 router.get(
   "/:id",
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const repo = new MemberRepository(req.tenantId!);
+    const user: ScopeUser = {
+      role: req.user!.role,
+      congregationId: req.user!.congregationId,
+    };
+    const repo = new MemberRepository(req.tenantId!, user);
     const member = await repo.findById(req.params.id);
     if (!member) {
       res.status(404).json({ success: false, error: "Membro não encontrado" });
@@ -40,7 +48,11 @@ router.get(
 router.post(
   "/",
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const repo = new MemberRepository(req.tenantId!);
+    const user: ScopeUser = {
+      role: req.user!.role,
+      congregationId: req.user!.congregationId,
+    };
+    const repo = new MemberRepository(req.tenantId!, user);
     const member = await repo.create(req.body);
     res.status(201).json({ success: true, data: member });
   })
@@ -50,7 +62,11 @@ router.post(
 router.put(
   "/:id",
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const repo = new MemberRepository(req.tenantId!);
+    const user: ScopeUser = {
+      role: req.user!.role,
+      congregationId: req.user!.congregationId,
+    };
+    const repo = new MemberRepository(req.tenantId!, user);
     await repo.update(req.params.id, req.body);
     res.json({ success: true, message: "Membro atualizado" });
   })
@@ -60,7 +76,11 @@ router.put(
 router.delete(
   "/:id",
   asyncHandler(async (req: AuthRequest, res: Response) => {
-    const repo = new MemberRepository(req.tenantId!);
+    const user: ScopeUser = {
+      role: req.user!.role,
+      congregationId: req.user!.congregationId,
+    };
+    const repo = new MemberRepository(req.tenantId!, user);
     await repo.softDelete(req.params.id);
     res.json({ success: true, message: "Membro removido" });
   })

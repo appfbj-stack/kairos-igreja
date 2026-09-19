@@ -25,6 +25,15 @@ function modelHasCongregationField(modelName: string): boolean {
 }
 
 /**
+ * Modelos "self-scoped": cada item É uma congregação (ou tenant).
+ * Para não-admins, filtra `id == user.congregationId` em vez de `congregationId == ...`.
+ * Sem isso, um GERENTE veria TODAS as congregações do admin.
+ *
+ * Adicione aqui qualquer outro model "self-scoped" futuro.
+ */
+const SELF_SCOPED_MODELS = new Set(["congregation"]);
+
+/**
  * Factory de rotas CRUD genéricas com controle de acesso por congregação.
  *
  * Regras:
@@ -65,6 +74,35 @@ export function createCrudRouter(
     return filtered;
   };
 
+  /**
+   * Aplica o filtro de escopo (tenantId + congregação) ao `where` Prisma.
+   *
+   * Para models com `congregationId`: `congregationId == user.congregationId OR IS NULL`.
+   * Para "self-scoped" (Congregation): `id == user.congregationId`.
+   * Para models sem congregationId (MuralNotice etc): só `tenantId`.
+   */
+  const applyScopeToWhere = (
+    where: any,
+    scope: { tenantId: string; congregationId?: string | null }
+  ): void => {
+    // Model self-scoped: cada item É uma congregação
+    if (SELF_SCOPED_MODELS.has(modelName) && scope.congregationId) {
+      where.id = scope.congregationId;
+      return;
+    }
+    // Model com congregationId: filtra por congregação do user (ou global)
+    if ("congregationId" in scope && modelHasCongregationField(modelName)) {
+      if (scope.congregationId) {
+        where.OR = [
+          { congregationId: scope.congregationId },
+          { congregationId: null },
+        ];
+      } else {
+        where.congregationId = null;
+      }
+    }
+  };
+
   // GET / — list
   router.get(
     "/",
@@ -73,19 +111,8 @@ export function createCrudRouter(
       const { search, page, limit, orderBy, orderDir } = req.query as Record<string, string | undefined>;
 
       const where: any = { tenantId: scope.tenantId, deletedAt: null };
-      // Filtro de congregação: se user não é admin E o model tem o campo
-      if ("congregationId" in scope && modelHasCongregationField(modelName)) {
-        // Mostra items da própria congregação OU itens globais (congregationId null)
-        if (scope.congregationId) {
-          where.OR = [
-            { congregationId: scope.congregationId },
-            { congregationId: null },
-          ];
-        } else {
-          // User sem congregação definida: vê só os globais do tenant
-          where.congregationId = null;
-        }
-      }
+      // Filtro de escopo (tenant + congregação)
+      applyScopeToWhere(where, scope);
       if (search && searchFields.length > 0) {
         const searchOr = searchFields.map((f) => ({ [f]: { contains: search } }));
         where.OR = where.OR ? [...where.OR, ...searchOr] : searchOr;
@@ -126,9 +153,7 @@ export function createCrudRouter(
       const scope = getScopeFilter(req);
       const model = (prisma as any)[modelName];
       const where: any = { id: req.params.id, tenantId: scope.tenantId, deletedAt: null };
-      if ("congregationId" in scope && scope.congregationId && modelHasCongregationField(modelName)) {
-        where.OR = [{ congregationId: scope.congregationId }, { congregationId: null }];
-      }
+      applyScopeToWhere(where, scope);
       const item = await model.findFirst({ where });
       if (!item) {
         res.status(404).json({ success: false, error: "Item não encontrado" });
@@ -180,9 +205,7 @@ export function createCrudRouter(
       const { id: _i, tenantId: _t, createdAt: _c, updatedAt: _u, deletedAt: _d, ...cleanData } = req.body || {};
       const model = (prisma as any)[modelName];
       const where: any = { id: req.params.id, tenantId: scope.tenantId, deletedAt: null };
-      if ("congregationId" in scope && scope.congregationId && modelHasCongregationField(modelName)) {
-        where.OR = [{ congregationId: scope.congregationId }, { congregationId: null }];
-      }
+      applyScopeToWhere(where, scope);
       try {
         const result = await model.updateMany({ where, data: cleanData });
         if (result.count === 0) {
@@ -219,9 +242,7 @@ export function createCrudRouter(
       const scope = getScopeFilter(req);
       const model = (prisma as any)[modelName];
       const where: any = { id: req.params.id, tenantId: scope.tenantId, deletedAt: null };
-      if ("congregationId" in scope && scope.congregationId && modelHasCongregationField(modelName)) {
-        where.OR = [{ congregationId: scope.congregationId }, { congregationId: null }];
-      }
+      applyScopeToWhere(where, scope);
       const result = await model.updateMany({
         where,
         data: { deletedAt: new Date() },

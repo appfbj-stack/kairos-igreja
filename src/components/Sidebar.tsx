@@ -40,8 +40,9 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   badge?: number;
-  adminOnly?: boolean;
-  superAdminOnly?: boolean;
+  adminOnly?: boolean;        // só ADMIN/SUPER_ADMIN
+  superAdminOnly?: boolean;   // só SUPER_ADMIN
+  congregationAdminOnly?: boolean; // só ADMIN/SUPER_ADMIN (esconde de GERENTE/OPERADOR)
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -58,13 +59,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'membros', label: 'Membros', icon: Users },
     { id: 'celulas', label: 'Células', icon: Home },
-    { id: 'congregacoes', label: 'Congregações', icon: Building2 },
-    { id: 'ministerios', label: 'Ministérios', icon: Briefcase },
+    { id: 'congregacoes', label: 'Congregações', icon: Building2, congregationAdminOnly: true },
+    { id: 'ministerios', label: 'Ministérios', icon: Briefcase, congregationAdminOnly: true },
     { id: 'eventos', label: 'Eventos', icon: Calendar },
     { id: 'obpc', label: 'Presença QR', icon: QrCode, adminOnly: true },
-    { id: 'financas', label: 'Finanças', icon: DollarSign },
+    { id: 'financas', label: 'Finanças', icon: DollarSign, congregationAdminOnly: true },
     { id: 'oracao', label: 'Oração', icon: Flame, badge: prayersCount },
-    { id: 'sermoes', label: 'Sermões', icon: BookOpen },
+    { id: 'sermoes', label: 'Sermões', icon: BookOpen, congregationAdminOnly: true },
     { id: 'voluntarios', label: 'Voluntários', icon: UserCheck },
     { id: 'mural', label: 'Mural', icon: Megaphone },
     { id: 'chat', label: 'Chat', icon: MessageSquare, badge: unreadChatCount },
@@ -74,12 +75,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'super-admin', label: 'Super Admin', icon: Shield, superAdminOnly: true },
   ];
 
-  // Filtra: esconde itens adminOnly se o user não for admin
-  // superAdminOnly é restrito a SUPER_ADMIN
+  // Filtra: esconde itens restritos baseado no role
   const isSuperAdmin = (user as any)?.role === 'SUPER_ADMIN';
+  const isAdminRole = isAdmin || isSuperAdmin;
   const navItems = allItems.filter((i) => {
     if (i.superAdminOnly) return isSuperAdmin;
-    if (i.adminOnly) return isAdmin;
+    if (i.adminOnly) return isAdminRole;
+    if (i.congregationAdminOnly) return isAdminRole; // GERENTE/OPERADOR não veem
     return true;
   });
 
