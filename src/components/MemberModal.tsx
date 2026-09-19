@@ -19,6 +19,7 @@ import {
   Cake,
 } from 'lucide-react';
 import { Member, MemberStatus, Celula, Congregation } from '../types';
+import { QuickDateInput } from './QuickDateInput';
 
 interface MemberModalProps {
   isOpen: boolean;
@@ -41,6 +42,8 @@ const AVAILABLE_MINISTRIES = [
   'Intercessão & Oração',
   'Ação Social',
 ];
+
+const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export const MemberModal: React.FC<MemberModalProps> = ({
   isOpen,
@@ -327,16 +330,22 @@ export const MemberModal: React.FC<MemberModalProps> = ({
                           }
                           return `${age > 0 ? `${age} anos` : 'Recém-nascido'}`;
                         }
+                        if (parts.length === 2) {
+                          // YYYY-MM
+                          return `Mês: ${MESES_NOMES[parseInt(parts[1], 10) - 1] || '?'}/${parts[0]}`;
+                        }
+                        if (parts.length === 1 && parts[0]) {
+                          return `Nascido em ${parts[0]}`;
+                        }
                         return 'Data válida';
                       })()}
                     </span>
                   )}
                 </label>
-                <input
-                  type="date"
+                <QuickDateInput
+                  id="birthDate"
                   value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#e0e0d0] focus:ring-2 focus:ring-[#5a5a40]/30 outline-none text-[#2a2a20] font-semibold"
+                  onChange={setBirthDate}
                 />
               </div>
 
@@ -482,11 +491,10 @@ export const MemberModal: React.FC<MemberModalProps> = ({
                   <Droplets className="w-3.5 h-3.5 text-blue-600" />
                   Data de Batismo
                 </label>
-                <input
-                  type="date"
+                <QuickDateInput
+                  id="baptismDate"
                   value={baptismDate}
-                  onChange={(e) => setBaptismDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#e0e0d0] focus:ring-2 focus:ring-[#5a5a40]/30 outline-none text-[#2a2a20]"
+                  onChange={setBaptismDate}
                 />
               </div>
 
@@ -552,11 +560,12 @@ export const MemberModal: React.FC<MemberModalProps> = ({
                     <label className="block font-bold text-[#8a8a70] text-[11px] mb-1">
                       Data de Validade da Carteirinha
                     </label>
-                    <input
-                      type="date"
+                    <QuickDateInput
+                      id="cardValidity"
                       value={cardValidity}
-                      onChange={(e) => setCardValidity(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-[#f5f5f0] border border-[#e0e0d0] focus:bg-white text-xs outline-none text-[#2a2a20]"
+                      onChange={setCardValidity}
+                      labels={{ year: "Ano", month: "Mês", day: "Dia" }}
+                      className="[&_input]:!py-2 [&_input]:!text-xs [&_select]:!py-2 [&_select]:!text-xs"
                     />
                   </div>
                   <div className="flex items-center text-[11px] text-[#8a8a70]">
