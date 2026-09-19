@@ -215,15 +215,21 @@ export async function processChat(
       const toolNameSent = toolCall.function.name;
       console.log(`[agent] tool_call: ${toolNameSent}`);
       // Mapear de volta do sanitized name → name original
+      // OpenRouter/provedores podem normalizar diferente:
+      // - nosso normalizer: replace de tudo que NÃO é [a-zA-Z0-9_-] por "_" → mantém "-"
+      // - alguns provedores também trocam "-" por "_"
+      // Comparação tolerante: ambos viram só [a-zA-Z0-9_]
+      const norm = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "_");
       let tool: ToolDefinition | undefined;
       for (const t of tools) {
-        if (t.name.replace(/[^a-zA-Z0-9_-]/g, "_") === toolNameSent) {
+        if (norm(t.name) === norm(toolNameSent)) {
           tool = t;
           break;
         }
       }
 
       if (!tool) {
+        console.log(`[agent] tool_name_lookup_fail: sent=${toolNameSent}, available=${tools.map((t) => t.name).join(", ")}`);
         return { ok: false, message: `Tool "${toolNameSent}" não encontrada.` };
       }
 
