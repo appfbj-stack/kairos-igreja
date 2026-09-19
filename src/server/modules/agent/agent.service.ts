@@ -5,12 +5,14 @@
  *
  * Fluxo:
  *   1. Recebe mensagem do usuário + contexto (tenant, role, congregação)
- *   2. Constrói system prompt com regras + tools filtradas pelo role
- *   3. Loop:
- *      - Envia mensagem + tools pro OpenRouter
+ *   2. Carrega histórico da conversa (memória in-process por usuário)
+ *   3. Constrói system prompt com regras + tools filtradas pelo role
+ *   4. Loop:
+ *      - Envia histórico + mensagem atual + tools pro OpenRouter
  *      - Se LLM pede tool: executa, manda resultado de volta
  *      - Se LLM responde texto: devolve pro frontend
- *   4. Limita a 5 iterações pra evitar loops infinitos
+ *   5. Salva turno no histórico (max 8 turnos = 16 mensagens)
+ *   6. Limita a 5 iterações pra evitar loops infinitos
  */
 
 import { toolsForRole, toolsToOpenRouterSchema, ToolDefinition, AgentContext } from "./tools.js";
@@ -35,6 +37,7 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "nex-agi/nex-n2.5-mini:free";
 const MAX_ITERATIONS = 5;
 const FETCH_TIMEOUT_MS = 120_000;
+const MAX_HISTORY_TURNS = 8; // 8 turnos = 16 mensagens (user+assistant cada)
 
 interface Message {
   role: "system" | "user" | "assistant" | "tool";
@@ -42,6 +45,32 @@ interface Message {
   tool_calls?: any[];
   tool_call_id?: string;
   name?: string;
+}
+
+/**
+ * Histórico de conversa em memória (por usuário).
+ * Persiste durante o processo do Node, reseta em restart.
+ * Map<userId, Message[]> — máximo MAX_HISTORY_TURNS * 2 mensagens por usuário.
+ */
+const conversationHistory = new Map<string, Message[]>();
+
+function getHistory(userId: string): Message[] {
+  return conversationHistory.get(userId) ?? [];
+}
+
+function appendHistory(userId: string, ...msgs: Message[]): void {
+  const current = conversationHistory.get(userId) ?? [];
+  const updated = [...current, ...msgs];
+  // Corta se passar do limite
+  const maxMsgs = MAX_HISTORY_TURNS * 2;
+  if (updated.length > maxMsgs) {
+    updated.splice(0, updated.length - maxMsgs);
+  }
+  conversationHistory.set(userId, updated);
+}
+
+function clearHistory(userId: string): void {
+  conversationHistory.delete(userId);
 }
 
 function buildSystemPrompt(ctx: AgentContext): string {
@@ -53,37 +82,30 @@ function buildSystemPrompt(ctx: AgentContext): string {
       ? `\n\nVocê tem acesso a todas as congregações do tenant.`
       : `\n\nVocê não tem congregação vinculada — apenas leitura (USUARIO).`;
 
-  return `# IDENTIDADE
-Você é a **Secretaria IA**, assistente pastoral do Kairos Igreja.
-Você ajuda pastoras, pastores, secretárias e tesoureiros via chat em PT-BR natural.
+  return `Você é a **Secretaria IA**, assistente pastoral do Kairos Igreja, em PT-BR natural.
 
-# INTENÇÕES (reconheça desde a primeira mensagem!)
-Quando o usuário disser QUALQUER uma destas frases, entre IMEDIATAMENTE no fluxo correspondente SEM perguntar de novo:
-- **CADASTRO**: "quero cadastrar", "cadastrar um membro", "novo membro", "inscrever", "registrar", "adicionar membro", "incluir pessoa", "cadastra o/a [nome]"
-- **BUSCA**: "buscar", "procurar", "quem é", "telefone de", "achar membro"
-- **EDIÇÃO**: "editar", "atualizar", "mudar telefone", "corrigir nome"
-- **TRANSFERÊNCIA**: "transferir", "mudar de congregação"
-- **INATIVAÇÃO**: "inativar", "desativar", "remover membro"
-- **CONGREGAÇÃO**: "listar congregações", "quais congregações"
+# REGRA DE OURO — DECISÃO IMEDIATA POR TOOL
+Quando o usuário pede algo, você DEVE chamar a tool correspondente IMEDIATAMENTE. NÃO pergunte "você quer buscar ou cadastrar?". O usuário já disse o que quer.
 
-Se o usuário já disse a intenção antes, NÃO pergunte de novo — apenas colete os dados que faltam.
+MAPA INTENÇÃO → TOOL (use sem perguntar):
+- "quero cadastrar", "cadastrar um membro", "novo membro", "inscrever", "registrar", "adicionar", "incluir pessoa", "cadastra o/a [nome]" → \`igreja:cadastrar-membro\`
+- "buscar", "procurar", "quem é", "telefone de", "achar" → \`igreja:buscar-membros\`
+- "editar", "atualizar", "mudar", "corrigir" → \`igreja:editar-membro\`
+- "transferir", "mudar de congregação" → \`igreja:transferir-membro\`
+- "inativar", "desativar", "remover" → \`igreja:inativar-membro\`
+- "listar congregações", "quais congregações" → \`igreja:listar-congregacoes\`
 
-# REGRAS
-1. **CADASTRE DIRETO** quando o usuário der dados suficientes (nome + 1 contato + congregação OU telefone/email).
-   NÃO faça busca ANTES de cadastrar — vá DIRETO pra \`igreja:cadastrar-membro\`. Se houver conflito (telefone/CPF já existe), mostre o conflito pro usuário e peça 1 frase de confirmação, então chame novamente com force=true.
-2. Se faltar APENAS o nome completo ou congregação, pergunte APENAS esse campo — nada mais.
-3. **NUNCA invente dados** que o usuário não forneceu.
-4. **Pastora/pastor** — use conforme o nome do usuário logado.
-5. **Datas em ISO** (YYYY-MM-DD ou YYYY-MM ou só YYYY).
-6. **Respostas CURTAS** (1-2 frases + ação).
-7. Para **editar/inativar/transferir**: confirme com 1 frase ("Confirma? (sim/não)").
+# CADASTRO — SEMPRE DIRETO
+1. Se o usuário disse "cadastrar" na conversa ATUAL, e a mensagem atual é só um nome ou nome+telefone → CHAME \`igreja:cadastrar-membro\` IMEDIATAMENTE. NÃO busque antes.
+2. Se a tool retornar \`conflict: true\` → mostre ao usuário QUEM já tem aquele telefone/CPF e pergunte "Cadastra mesmo assim? (sim/não)". Se sim → chame de novo com \`force=true\`.
+3. Se faltar SÓ o nome → pergunte APENAS o nome. Se faltar SÓ o telefone → pergunte APENAS o telefone.
+4. NUNCA invente dados que o usuário não forneceu.
 
-# DUPLICATAS
-Quando \`igreja:cadastrar-membro\` retornar \`conflict: true\`:
-- Mostre ao usuário QUEM já tem aquele telefone/CPF.
-- Pergunte APENAS: "Cadastra mesmo assim? (sim/não)"
-- Se "sim" → chame a tool novamente com \`force=true\`.
-- Se "não" → cancele e ofereça editar o existente.
+# REGRAS GERAIS
+- Datas em ISO (YYYY-MM-DD ou YYYY ou YYYY-MM).
+- Respostas CURTAS (1-2 frases).
+- Para editar/inativar/transferir: confirme com 1 frase ("Confirma? sim/não").
+- Use "pastor/pastora" conforme o nome do usuário.
 
 # CONTEXTO
 - Usuário logado: ${ctx.userName} (${ctx.role})
@@ -91,19 +113,7 @@ Quando \`igreja:cadastrar-membro\` retornar \`conflict: true\`:
 ${filtroCong}
 
 # TOOLS DISPONÍVEIS
-${tools.map((t) => `- ${t.name}: ${t.description}`).join("\n")}
-
-Use a tool apropriada baseada na intenção. Se não souber, peça esclarecimento.
-
-# CONTEXTO
-- Usuário logado: ${ctx.userName} (${ctx.role})
-- Tenant: ${ctx.tenantId}
-${filtroCong}
-
-# TOOLS DISPONÍVEIS
-${tools.map((t) => `- ${t.name}: ${t.description}`).join("\n")}
-
-Use a tool apropriada baseada na intenção. Se não souber, peça esclarecimento.`;
+${tools.map((t) => `- ${t.name}: ${t.description}`).join("\n")}`;
 }
 
 export async function processChat(
@@ -114,8 +124,29 @@ export async function processChat(
   const toolsSchema = toolsToOpenRouterSchema(tools);
   const toolsByName = new Map(tools.map((t) => [t.name, t]));
 
+  // ============================================
+  // COMANDO ESPECIAL: "limpar" / "reset" / "começar de novo"
+  // Limpa o histórico da conversa do usuário.
+  // ============================================
+  const trimmed = req.message.trim().toLowerCase();
+  if (["limpar", "reset", "esquecer", "começar de novo", "nova conversa", "zerar"].includes(trimmed)) {
+    clearHistory(ctx.userId);
+    return {
+      ok: true,
+      message: "Histórico da conversa limpo. Pode começar de novo! 😊",
+      iterations: 0,
+    };
+  }
+
+  // ============================================
+  // HISTÓRICO DE CONVERSA (memória in-process)
+  // Carrega turnos anteriores pra LLM ter contexto.
+  // ============================================
+  const history = getHistory(ctx.userId);
+
   const messages: Message[] = [
     { role: "system", content: buildSystemPrompt(ctx) },
+    ...history,
     { role: "user", content: req.message },
   ];
 
@@ -131,6 +162,7 @@ export async function processChat(
   let iterations = 0;
   let lastToolData: any = null;
   let lastToolName: string | undefined;
+  let finalAssistantText: string | null = null;
 
   while (iterations < MAX_ITERATIONS) {
     iterations++;
@@ -157,7 +189,7 @@ export async function processChat(
     });
 
     const t0 = Date.now();
-    console.log(`[agent] iter=${iterations} model=${DEFAULT_MODEL} msgs=${messages.length}`);
+    console.log(`[agent] iter=${iterations} model=${DEFAULT_MODEL} history=${history.length} msgs=${messages.length}`);
 
     if (!res.ok) {
       const text = await res.text();
@@ -242,20 +274,31 @@ export async function processChat(
 
     // LLM respondeu texto → fim
     const text = msg.content ?? "(sem resposta)";
+    finalAssistantText = text;
+    break;
+  }
+
+  if (finalAssistantText === null) {
     return {
-      ok: true,
-      message: text,
-      tool: lastToolName,
-      data: lastToolData,
-      iterations,
-      modelUsed: DEFAULT_MODEL,
-      suggestions: sugerirProximas(lastToolData, lastToolName, ctx),
+      ok: false,
+      message: `Loop estourou após ${MAX_ITERATIONS} iterações. Tente "limpar" pra resetar.`,
     };
   }
 
+  // ============================================
+  // SALVA HISTÓRICO (apenas turnos user+assistant de texto/tool final)
+  // ============================================
+  appendHistory(ctx.userId, { role: "user", content: req.message });
+  appendHistory(ctx.userId, { role: "assistant", content: finalAssistantText });
+
   return {
-    ok: false,
-    message: `Loop estourou após ${MAX_ITERATIONS} iterações.`,
+    ok: true,
+    message: finalAssistantText,
+    tool: lastToolName,
+    data: lastToolData,
+    iterations,
+    modelUsed: DEFAULT_MODEL,
+    suggestions: sugerirProximas(lastToolData, lastToolName, ctx),
   };
 }
 
