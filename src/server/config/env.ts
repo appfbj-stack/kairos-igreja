@@ -11,4 +11,5 @@ export const env = {
   BACKUP_DIR: process.env.BACKUP_DIR || "./backups",
   OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || "",
   OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || "nex-agi/nex-n2.5-mini:free",
+  MINIMAX_API_KEY: process.env.MINIMAX_API_KEY || "",
 } as const;

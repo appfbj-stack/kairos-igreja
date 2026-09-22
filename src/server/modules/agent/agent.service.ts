@@ -1,18 +1,23 @@
 /**
  * Orquestrador do agente IA do Kairos Igreja.
  *
- * Sprint 2.2: LLM REAL via OpenRouter (modelo free llama-3.1-8b-instruct).
+ * v2.11.0: MiniMax (Plano Mensal Plus) como provider principal,
+ *          com OpenRouter como fallback opcional.
  *
  * Fluxo:
  *   1. Recebe mensagem do usuário + contexto (tenant, role, congregação)
  *   2. Carrega histórico da conversa (memória in-process por usuário)
  *   3. Constrói system prompt com regras + tools filtradas pelo role
  *   4. Loop:
- *      - Envia histórico + mensagem atual + tools pro OpenRouter
+ *      - Envia histórico + mensagem atual + tools pro LLM
  *      - Se LLM pede tool: executa, manda resultado de volta
- *      - Se LLM responde texto: devolve pro frontend
+ *      - Se LLM responde texto: devolve pro frontend (strip <think>...</think>)
  *   5. Salva turno no histórico (max 8 turnos = 16 mensagens)
  *   6. Limita a 5 iterações pra evitar loops infinitos
+ *
+ * Providers (prioridade):
+ *   1. MINIMAX_API_KEY → MiniMax-M3 (512k contexto, rápido, suporta tools)
+ *   2. OPENROUTER_API_KEY → modelo nex-2.5-mini:free (fallback)
  */
 
 import { toolsForRole, toolsToOpenRouterSchema, ToolDefinition, AgentContext } from "./tools.js";
@@ -33,11 +38,33 @@ export interface ChatResponse {
   iterations?: number;
 }
 
+const MINIMAX_URL = "https://api.minimax.io/v1/chat/completions";
+const MINIMAX_MODEL = "MiniMax-M3";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "nex-agi/nex-n2.5-mini:free";
+const OPENROUTER_MODEL = "nex-agi/nex-n2.5-mini:free";
 const MAX_ITERATIONS = 5;
-const FETCH_TIMEOUT_MS = 120_000;
+const FETCH_TIMEOUT_MS = 60_000; // MiniMax costuma responder em <5s; 60s é folga
 const MAX_HISTORY_TURNS = 8; // 8 turnos = 16 mensagens (user+assistant cada)
+
+/** Provider ativo baseado nas chaves disponíveis. */
+function pickProvider(): { name: string; url: string; model: string; apiKey: string } {
+  const minimaxKey = process.env.MINIMAX_API_KEY ?? env.MINIMAX_API_KEY;
+  const openrouterKey = process.env.OPENROUTER_API_KEY ?? env.OPENROUTER_API_KEY;
+  if (minimaxKey) {
+    return { name: "minimax", url: MINIMAX_URL, model: MINIMAX_MODEL, apiKey: minimaxKey };
+  }
+  if (openrouterKey) {
+    return { name: "openrouter", url: OPENROUTER_URL, model: OPENROUTER_MODEL, apiKey: openrouterKey };
+  }
+  return { name: "none", url: "", model: "", apiKey: "" };
+}
+
+/** Strip <think>...</think> do conteúdo (MiniMax M3 mete raciocínio inline). */
+function stripThinking(text: string | undefined): string {
+  if (!text) return "";
+  // Remove blocos <think>...</think> (inclusive multiline). Sem isso o usuário vê o "pensamento" do agente.
+  return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+}
 
 interface Message {
   role: "system" | "user" | "assistant" | "tool";
@@ -150,14 +177,15 @@ export async function processChat(
     { role: "user", content: req.message },
   ];
 
-  const apiKey = process.env.OPENROUTER_API_KEY ?? env.OPENROUTER_API_KEY;
-  if (!apiKey) {
+  const provider = pickProvider();
+  if (provider.apiKey === "") {
     return {
       ok: false,
       message:
-        "OPENROUTER_API_KEY não configurada no servidor. Configure no .env e reinicie.",
+        "Nenhuma LLM_API_KEY configurada. Defina MINIMAX_API_KEY (preferido) ou OPENROUTER_API_KEY no .env e reinicie.",
     };
   }
+  console.log(`[agent] provider=${provider.name} model=${provider.model}`);
 
   let iterations = 0;
   let lastToolData: any = null;
@@ -167,29 +195,37 @@ export async function processChat(
   while (iterations < MAX_ITERATIONS) {
     iterations++;
 
-    const body = {
-      model: DEFAULT_MODEL,
+    const body: any = {
+      model: provider.model,
       messages,
       tools: toolsSchema,
       tool_choice: "auto",
       temperature: 0.3,
       max_tokens: 800,
     };
+    // MiniMax: habilita reasoning_split pra receber thinking separado (não inline)
+    if (provider.name === "minimax") {
+      body.reasoning_split = true;
+    }
 
-    const res = await fetch(OPENROUTER_URL, {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${provider.apiKey}`,
+      "Content-Type": "application/json",
+    };
+    if (provider.name === "openrouter") {
+      headers["HTTP-Referer"] = "https://igrejasede.fbautomacao.space";
+      headers["X-Title"] = "Kairos Igreja Agent";
+    }
+
+    const res = await fetch(provider.url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://igrejasede.fbautomacao.space",
-        "X-Title": "Kairos Igreja Agent",
-      },
+      headers,
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
 
     const t0 = Date.now();
-    console.log(`[agent] iter=${iterations} model=${DEFAULT_MODEL} history=${history.length} msgs=${messages.length}`);
+    console.log(`[agent] iter=${iterations} provider=${provider.name} model=${provider.model} history=${history.length} msgs=${messages.length}`);
 
     if (!res.ok) {
       const text = await res.text();
@@ -279,7 +315,8 @@ export async function processChat(
     }
 
     // LLM respondeu texto → fim
-    const text = msg.content ?? "(sem resposta)";
+    // MiniMax pode devolver thinking inline mesmo com reasoning_split=true — strip por garantia
+    const text = stripThinking(msg.content) || "(sem resposta)";
     finalAssistantText = text;
     break;
   }
@@ -303,7 +340,7 @@ export async function processChat(
     tool: lastToolName,
     data: lastToolData,
     iterations,
-    modelUsed: DEFAULT_MODEL,
+    modelUsed: `${provider.name}/${provider.model}`,
     suggestions: sugerirProximas(lastToolData, lastToolName, ctx),
   };
 }
