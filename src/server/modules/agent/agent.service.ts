@@ -120,7 +120,9 @@ INTENÇÃO → TOOL (chame IMEDIATAMENTE, sem perguntar):
 - transferir / mudar de congregação → igreja:transferir-membro
 - inativar / desativar / remover → igreja:inativar-membro
 
-CADASTRO: o usuário dá nome, CHAME igreja:cadastrar-membro com name=o_nome. Se der telefone junto, passe phone. NÃO PERGUNTE NADA ANTES. O nome pode ser qualquer um (curto, sem sobrenome, sem acento) — cadastra o que veio.
+CADASTRO: extraia TODOS os campos que o usuário mencionar (nome, telefone, email, CPF, data nascimento, data batismo, estado civil, filiação/pai/mãe, endereço, ministérios, célula por nome). Se der só nome, cadastra só com nome — telefone é opcional. NÃO PERGUNTE NADA ANTES. NÃO peça confirmação. O nome pode ser qualquer um (curto, sem sobrenome, sem acento) — cadastra o que veio.
+
+CAMPOS SUPORTADOS em igreja:cadastrar-membro: name (obrigatório), phone, email, birthDate, cpf, maritalStatus, status, role, congregationName, celulaName, baptismDate, filiation, address, cardValidity, ministries.
 
 CONFLITO (conflict=true): mostre ao usuário QUEM já tem o telefone/CPF e pergunte "Cadastra mesmo assim?". Se sim → chame de novo com force=true.
 

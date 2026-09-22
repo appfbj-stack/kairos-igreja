@@ -142,22 +142,37 @@ const cadastrarMembroInput = z.object({
   name: z.string().min(2).describe("Nome completo do membro"),
   phone: z.string().optional().describe("Telefone com DDD"),
   email: z.string().email().optional(),
-  birthDate: z.string().optional().describe("Data nascimento ISO"),
+  birthDate: z.string().optional().describe("Data nascimento ISO (YYYY, YYYY-MM, ou YYYY-MM-DD)"),
   cpf: z.string().optional().describe("CPF (11 dígitos, sem pontuação)"),
   maritalStatus: z
     .enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"])
-    .optional(),
+    .optional()
+    .describe("Estado civil"),
+  status: z
+    .enum(["membro", "visitante", "convertido", "batizado", "em_discipulado", "ausente"])
+    .optional()
+    .describe("Status eclesiástico. Default = membro"),
+  role: z
+    .enum(["membro", "obreiro", "diacono", "presbitero", "pastor", "lider_celula", "tesoureiro"])
+    .optional()
+    .describe("Cargo ministerial. Default = membro"),
   congregationId: z.string().uuid().optional().describe("UUID da congregação (opcional se passar congregationName)"),
   congregationName: z.string().optional().describe("Nome (ou parte) da congregação — ex: 'Cajuru', 'Sede'. Faz match fuzzy."),
-  filiation: z.string().optional().describe("Nome do pai/mãe"),
-  address: z.string().optional(),
-  notes: z.string().optional(),
+  celulaId: z.string().uuid().optional().describe("UUID da célula"),
+  celulaName: z.string().optional().describe("Nome (ou parte) da célula — fuzzy match"),
+  baptismDate: z.string().optional().describe("Data do batismo (ISO)"),
+  filiation: z.string().optional().describe("Filiação (nome do pai e da mãe)"),
+  address: z.string().optional().describe("Endereço completo"),
+  cardValidity: z.string().optional().describe("Validade da carteirinha (ISO). Default = +2 anos."),
+  ministries: z.array(z.string()).optional().describe("Ministérios que participa (ex: ['Louvor', 'Diaconato'])"),
+  notes: z.string().optional().describe("Observações gerais"),
+  consentAccepted: z.boolean().optional().describe("LGPD: true se usuário consentiu com Política de Privacidade. Default = true se cadastro via chat"),
 });
 
 const cadastrarMembroTool: ToolDefinition = {
   name: "igreja:cadastrar-membro",
   description:
-    "Cria um novo membro no sistema. Secretária pode cadastrar na sua própria congregação. Admin/SUPER_ADMIN pode escolher a congregação. Detecta automaticamente duplicatas por telefone/CPF (a menos que force=true).",
+    "Cria um novo membro no sistema. Secretária pode cadastrar na sua própria congregação. Admin/SUPER_ADMIN pode escolher a congregação. Aceita TODOS os campos do formulário (CPF, filiação, endereço, estado civil, data batismo, ministérios, célula, cargo, status). Detecta automaticamente duplicatas por telefone/CPF (a menos que force=true).",
   inputSchema: cadastrarMembroInput.extend({
     force: z.boolean().optional().describe("Se true, cadastra mesmo havendo conflito de telefone/CPF (use após o usuário confirmar)."),
   }),
@@ -185,6 +200,28 @@ const cadastrarMembroTool: ToolDefinition = {
         );
       }
       congregationId = partial.id;
+    }
+
+    // Resolver celulaId: fuzzy match por nome
+    let celulaId: string | undefined = input.celulaId;
+    if (!celulaId && input.celulaName) {
+      const norm = (s: string) =>
+        s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      const target = norm(input.celulaName);
+      const where: any = { tenantId: ctx.tenantId, deletedAt: null };
+      if (congregationId) where.congregationId = congregationId;
+      const celulas = await prisma.celula.findMany({
+        where,
+        select: { id: true, name: true },
+        take: 50,
+      });
+      const exact = celulas.find((c) => norm(c.name) === target);
+      const partial = exact ?? celulas.find(
+        (c) => norm(c.name).includes(target) || target.includes(norm(c.name))
+      );
+      if (partial) {
+        celulaId = partial.id;
+      }
     }
 
     // Usuário não-admin só pode cadastrar na própria congregação
@@ -268,11 +305,19 @@ const cadastrarMembroTool: ToolDefinition = {
         birthDate: input.birthDate ? new Date(input.birthDate) : null,
         cpf: input.cpf ?? null,
         maritalStatus: input.maritalStatus ?? null,
+        status: input.status ?? "membro",
+        role: input.role ?? null,
         congregationId,
+        celulaId: celulaId ?? null,
+        baptismDate: input.baptismDate ? new Date(input.baptismDate) : null,
         filiation: input.filiation ?? null,
         address: input.address ?? null,
+        cardValidity: input.cardValidity ?? null,
+        ministries: input.ministries ? JSON.stringify(input.ministries) : null,
         notes: input.notes ?? null,
-        status: "membro",
+        // LGPD: chat считается consentimento (usuário logado)
+        consentAcceptedAt: input.consentAccepted !== false ? new Date() : null,
+        consentTermsVersion: "v1.0-chat-2026",
       },
     });
     return {
