@@ -113,6 +113,8 @@ function buildSystemPrompt(ctx: AgentContext): string {
 
 REGRA ABSOLUTA: NUNCA peça confirmação. NUNCA peça sobrenome. NUNCA diga "tem certeza?". NUNCA diga "preciso de mais dados". Apenas CHAME a tool.
 
+USE O HISTÓRICO: olhe as mensagens anteriores da conversa. Se o usuário JÁ deu nome em turno anterior, USE ESSE NOME agora — NÃO peça de novo. Se deu telefone, use. Extraia TUDO que aparecer nas mensagens anteriores ou na mensagem atual.
+
 INTENÇÃO → TOOL (chame IMEDIATAMENTE, sem perguntar):
 - cadastrar / inscrever / registrar / novo membro / adicionar → igreja:cadastrar-membro
 - buscar / procurar / quem é / telefone de → igreja:buscar-membros
