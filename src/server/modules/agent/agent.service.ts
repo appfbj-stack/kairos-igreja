@@ -197,8 +197,10 @@ export async function processChat(
       model: provider.model,
       messages,
       tools: toolsSchema,
-      tool_choice: "auto",
-      temperature: 0.3,
+      // Para Secretaria IA: SEMPRE forçar o LLM a chamar uma tool.
+      // Sem isso, o M3 tende a responder só com texto ("Qual o nome?" etc).
+      tool_choice: "required",
+      temperature: 0.2,
       max_tokens: 800,
     };
     // MiniMax: habilita reasoning_split pra receber thinking separado (não inline)
