@@ -6,7 +6,7 @@
  * mesmo sem internet (depois de carregado pelo menos 1x online).
  */
 
-const CACHE_NAME = "kairos-igreja-v2.12.4";
+const CACHE_NAME = "kairos-igreja-v2.12.5";
 const STATIC_ASSETS = [
   "/",
   "/privacidade",

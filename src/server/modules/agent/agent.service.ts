@@ -303,9 +303,9 @@ export async function processChat(
       model: provider.model,
       messages,
       tools: toolsSchema,
-      // Deixa o LLM escolher. "required" causava tool_calls errados
-      // (buscar quando deveria editar). O prompt é forte o suficiente.
-      tool_choice: "auto",
+      // Força tool_call SEMPRE. Combinado com auto-edit (que intercepta
+      // antes do LLM), o agente nunca mais fica só em modo chatbot.
+      tool_choice: "required",
       temperature: 0.2,
       max_tokens: 800,
     };
