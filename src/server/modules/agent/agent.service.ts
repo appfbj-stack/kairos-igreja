@@ -126,6 +126,8 @@ CADASTRO: extraia TODOS os campos que o usuário mencionar (nome, telefone, emai
 
 CAMPOS SUPORTADOS em igreja:cadastrar-membro: name (obrigatório), phone, email, birthDate, cpf, maritalStatus, status, role, congregationName, celulaName, baptismDate, filiation, address, cardValidity, ministries.
 
+PÓS-CADASTRO: depois que cadastrar, mostre em 1 frase o que foi salvo. Se o usuário der MAIS dados (telefone, CPF, etc) depois do cadastro → use igreja:editar-membro pra atualizar o membro recém-criado. Se o usuário disser "sim", "ok", "feito" → responda só com texto curto, SEM chamar tool.
+
 CONFLITO (conflict=true): mostre ao usuário QUEM já tem o telefone/CPF e pergunte "Cadastra mesmo assim?". Se sim → chame de novo com force=true.
 
 REGRAS:
@@ -197,9 +199,9 @@ export async function processChat(
       model: provider.model,
       messages,
       tools: toolsSchema,
-      // Para Secretaria IA: SEMPRE forçar o LLM a chamar uma tool.
-      // Sem isso, o M3 tende a responder só com texto ("Qual o nome?" etc).
-      tool_choice: "required",
+      // Deixa o LLM escolher. "required" causava tool_calls errados
+      // (buscar quando deveria editar). O prompt é forte o suficiente.
+      tool_choice: "auto",
       temperature: 0.2,
       max_tokens: 800,
     };
