@@ -100,6 +100,75 @@ function clearHistory(userId: string): void {
   conversationHistory.delete(userId);
 }
 
+/**
+ * Estado de "último membro criado" por usuário.
+ * Usado pra auto-editar: se o usuário enviar dados logo após cadastrar
+ * (ex: "telefone 159..."), o sistema já edita direto, sem depender do LLM.
+ * Reseta em "limpar" e em restart.
+ */
+interface LastMemberAction {
+  memberId: string;
+  memberName: string;
+  tool: "igreja:cadastrar-membro" | "igreja:editar-membro";
+}
+const lastMemberActionByUser = new Map<string, LastMemberAction | null>();
+
+function setLastMemberAction(userId: string, action: LastMemberAction | null) {
+  if (action === null) lastMemberActionByUser.delete(userId);
+  else lastMemberActionByUser.set(userId, action);
+}
+function getLastMemberAction(userId: string): LastMemberAction | null {
+  return lastMemberActionByUser.get(userId) ?? null;
+}
+
+/**
+ * Detecta se a mensagem do usuário parece ser DADOS após um cadastro
+ * (telefone, CPF, email, data, endereço). Se sim + existe lastMemberAction,
+ * auto-edita direto sem LLM.
+ *
+ * Retorna `null` se não parece ser dados editáveis; ou um objeto `{ field, value }`.
+ */
+function detectQuickEditData(msg: string): { field: string; value: string } | null {
+  const t = msg.trim();
+
+  // Telefone: "telefone 1599...", "celular 11...", "fone 99999-9999", ou só dígitos >= 8
+  const phoneMatch = t.match(/^(?:telefone|celular|fone|whats|whatsapp|zap|tel)[:\s]+(.+)/i);
+  if (phoneMatch) return { field: "phone", value: phoneMatch[1].trim() };
+  if (/^\d{8,}$/.test(t.replace(/\D/g, "")) && t.replace(/\D/g, "").length >= 8) {
+    return { field: "phone", value: t.trim() };
+  }
+
+  // CPF: "cpf 12345678900" ou só 11 dígitos
+  const cpfMatch = t.match(/^(?:cpf)[:\s]+(.+)/i);
+  if (cpfMatch) return { field: "cpf", value: cpfMatch[1].replace(/\D/g, "") };
+  if (/^\d{11}$/.test(t.replace(/\D/g, ""))) {
+    return { field: "cpf", value: t.replace(/\D/g, "") };
+  }
+
+  // Email
+  const emailMatch = t.match(/^(?:email|e-mail)[:\s]+(.+)/i);
+  if (emailMatch) return { field: "email", value: emailMatch[1].trim() };
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return { field: "email", value: t.trim() };
+
+  // Data de nascimento
+  const birthMatch = t.match(/^(?:nascimento|nascido|nasc|aniversario|aniversário)[:\s]+(.+)/i);
+  if (birthMatch) return { field: "birthDate", value: birthMatch[1].trim() };
+
+  // Endereço
+  const addrMatch = t.match(/^(?:endere[çc]o|rua|av|avenida)[:\s]+(.+)/i);
+  if (addrMatch) return { field: "address", value: addrMatch[1].trim() };
+
+  // Batismo
+  const baptismMatch = t.match(/^(?:batismo|batizado|batizada)[:\s]+(.+)/i);
+  if (baptismMatch) return { field: "baptismDate", value: baptismMatch[1].trim() };
+
+  // Filiação
+  const filiationMatch = t.match(/^(?:filia[çc][ãa]o|pai|mae|m[ãa]e)[:\s]+(.+)/i);
+  if (filiationMatch) return { field: "filiation", value: filiationMatch[1].trim() };
+
+  return null;
+}
+
 function buildSystemPrompt(ctx: AgentContext): string {
   const tools = toolsForRole(ctx.role);
   const isAdmin = ctx.role === "SUPER_ADMIN" || ctx.role === "ADMIN";
@@ -158,6 +227,7 @@ export async function processChat(
   const trimmed = req.message.trim().toLowerCase();
   if (["limpar", "reset", "esquecer", "começar de novo", "nova conversa", "zerar"].includes(trimmed)) {
     clearHistory(ctx.userId);
+    setLastMemberAction(ctx.userId, null);
     return {
       ok: true,
       message: "Histórico da conversa limpo. Pode começar de novo! 😊",
@@ -170,6 +240,40 @@ export async function processChat(
   // Carrega turnos anteriores pra LLM ter contexto.
   // ============================================
   const history = getHistory(ctx.userId);
+
+  // ============================================
+  // AUTO-EDIT RÁPIDO (pós-cadastro)
+  // Se o usuário acabou de criar um membro E agora envia dados
+  // (telefone, CPF, email, etc), edita DIRETO sem LLM.
+  // Isso evita alucinação do tipo "Atualizado!" sem tool_call.
+  // ============================================
+  const lastAction = getLastMemberAction(ctx.userId);
+  const quickEdit = detectQuickEditData(req.message);
+  if (lastAction && quickEdit) {
+    const editarTool = tools.find((t) => t.name === "igreja:editar-membro");
+    if (editarTool) {
+      try {
+        const result = await editarTool.execute(
+          { memberId: lastAction.memberId, fields: { [quickEdit.field]: quickEdit.value } },
+          ctx
+        );
+        const msg = `✅ Atualizei ${quickEdit.field} de **${lastAction.memberName}** com "${quickEdit.value}".`;
+        appendHistory(ctx.userId, { role: "user", content: req.message });
+        appendHistory(ctx.userId, { role: "assistant", content: msg });
+        return {
+          ok: true,
+          message: msg,
+          tool: "igreja:editar-membro",
+          data: result,
+          iterations: 0,
+          modelUsed: "auto-edit",
+        };
+      } catch (e) {
+        // Cai pro fluxo normal se der erro
+        console.log(`[agent] auto_edit_failed: ${(e as Error).message}`);
+      }
+    }
+  }
 
   const messages: Message[] = [
     { role: "system", content: buildSystemPrompt(ctx) },
@@ -297,6 +401,15 @@ export async function processChat(
         const result = await tool.execute(parsed.data, ctx);
         lastToolData = result;
         lastToolName = tool.name;
+
+        // Track pra auto-editar depois do cadastro
+        if (tool.name === "igreja:cadastrar-membro" && result && typeof result === "object" && (result as any).ok && (result as any).id) {
+          setLastMemberAction(ctx.userId, {
+            memberId: (result as any).id,
+            memberName: (result as any).name,
+            tool: "igreja:cadastrar-membro",
+          });
+        }
 
         // devolve pro LLM
         messages.push(msg);
